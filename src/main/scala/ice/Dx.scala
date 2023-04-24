@@ -131,7 +131,7 @@ object Dx {
         case Right(result) =>
           val map = JsonUtil.jsonStringToMap(result)
           lastListFileResult =
-            map("entries").asInstanceOf[List[mutable.LinkedHashMap[String, String]]].map { entry =>
+            map("entries").asInstanceOf[List[Map[String, String]]].map { entry =>
               val path: String = entry("path_display")
               val isDirectory: Boolean = entry(".tag") == "folder"
               val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
