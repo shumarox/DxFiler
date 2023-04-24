@@ -143,7 +143,7 @@ object Dx {
           lastListFileResult
         case Left(result) =>
           System.err.println(result)
-          Dialog.showMessage(null, "フォルダ一覧情報の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+          Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
           Array[DxPath]()
       }
     }
@@ -169,7 +169,7 @@ object Dx {
         result
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "フォルダ一覧情報の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Dialog.showMessage(null, "ダウンロードに失敗しました。", APP_NAME, Dialog.Message.Error)
         null
     }
   }
@@ -209,7 +209,7 @@ object Dx {
         folder
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "フォルダ一覧情報の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Dialog.showMessage(null, "ダウンロードに失敗しました。", APP_NAME, Dialog.Message.Error)
         null
     }
   }
