@@ -28,6 +28,7 @@ object JsonUtil {
     o match {
       case m: NativeObject => toMap(m)
       case l: NativeArray => toList(l)
+      case i: java.lang.Integer => i.toString
       case d: java.lang.Double => BigDecimal(d).bigDecimal.toPlainString.replaceAll("\\.0$", "")
       case o => o
     }
