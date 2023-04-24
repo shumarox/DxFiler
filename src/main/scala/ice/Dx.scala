@@ -162,7 +162,7 @@ object Dx {
 
     val path = file.toPath.toString
 
-    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "$path"}""")
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "${escapeUnicode(path)}"}""")
     processHttpDownload("https://content.dropboxapi.com/2/files/download", "POST", properties, null, path.substring(path.lastIndexOf("/") + 1)).match {
       case Right(result) =>
         file.downloaded = result
@@ -179,7 +179,7 @@ object Dx {
 
     val path = file.toPath.toString
 
-    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "$path"}""")
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "$escapeUnicode(path)}"}""")
     processHttpDownload("https://content.dropboxapi.com/2/files/download_zip", "POST", properties, null, file.getName + ".zip").match {
       case Right(result) =>
         val parent = TempFileUtil.makeWorkDirectory()
@@ -213,6 +213,9 @@ object Dx {
         null
     }
   }
+
+  private def escapeUnicode(s: String): String =
+    s.map(c => if c <= 0x7f then c else String.format("\\u%04x", c.toInt)).mkString
 
   private def readText(is: InputStream): String = {
     val result = new ByteArrayOutputStream()
