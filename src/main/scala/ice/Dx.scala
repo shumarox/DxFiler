@@ -179,7 +179,7 @@ object Dx {
 
     val path = file.toPath.toString
 
-    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "$escapeUnicode(path)}"}""")
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "${escapeUnicode(path)}"}""")
     processHttpDownload("https://content.dropboxapi.com/2/files/download_zip", "POST", properties, null, file.getName + ".zip").match {
       case Right(result) =>
         val parent = TempFileUtil.makeWorkDirectory()
