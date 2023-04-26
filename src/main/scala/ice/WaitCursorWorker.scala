@@ -32,6 +32,8 @@ object WaitCursorWorker {
         override def accept(c: Component) = false
       })
 
+      addKeyListener(new java.awt.event.KeyAdapter {})
+      addMouseListener(new java.awt.event.MouseAdapter {})
       requestFocusInWindow
       setWaitCursor()
 
