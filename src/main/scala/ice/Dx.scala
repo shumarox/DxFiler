@@ -269,6 +269,7 @@ object Dx {
           processHttpUpload("https://content.dropboxapi.com/2/files/upload_session/append_v2", "POST", properties, is, limit).match {
             case Right(_) =>
             case Left(result) =>
+              System.err.println(result)
               throw new IllegalStateException(result)
           }
 
@@ -321,6 +322,23 @@ object Dx {
       case Left(result) =>
         System.err.println(result)
         throw new IllegalStateException(result)
+    }
+  }
+
+  def delete(path: String): Unit = {
+    ensureAccessToken()
+
+    if (path == "/") throw new IllegalArgumentException("can't remove root path")
+
+    val body = s"""{"path": "$path"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/files/delete_v2", "POST", properties, body).match {
+      case Right(_) =>
+      case Left(result) =>
+        System.err.println(result)
+        Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Array[DxPath]()
     }
   }
 

@@ -119,10 +119,22 @@ class DxFiler {
           }
         }
     }
+
+    contents +=
+      createMenuItem("Delete", Key.D) {
+        getSelectedFiles.foreach { file =>
+          executeAndShowError {
+            deleteFile(file)
+          }
+        }
+      }
   }
 
   private def openFile(file: DxFile): Unit =
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
+
+  private def deleteFile(file: DxFile): Unit =
+    WaitCursorWorker(frame, true)(() => Dx.delete(file.toPath.toString))(null).execute()
 
   table.listenTo(table.mouse.clicks)
   table.listenTo(table.keys)
