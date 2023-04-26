@@ -134,7 +134,10 @@ class DxFiler {
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
 
   private def deleteFile(file: DxFile): Unit =
-    WaitCursorWorker(frame, true)(() => Dx.delete(file.toPath.toString))(null).execute()
+    WaitCursorWorker(frame, true) { () =>
+      Dx.delete(file.toPath.toString)
+      refresh()
+    }(null).execute()
 
   table.listenTo(table.mouse.clicks)
   table.listenTo(table.keys)
@@ -212,7 +215,7 @@ class DxFiler {
   private val treeSelectionListener: TreeSelectionListener =
     (tse: TreeSelectionEvent) => {
       val node = tse.getPath.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]
-      WaitCursorWorker(frame, true)(() => showChildren(node))(null).execute()
+      WaitCursorWorker(frame, true)(() => refresh(node))(null).execute()
     }
 
   private def getChildren(file: DxFile): Array[DxFile] =
@@ -308,19 +311,15 @@ class DxFiler {
     table.listenTo(table.selection)
   }
 
-  private def showChildren(node: DefaultMutableTreeNode): Unit = {
+  private def refresh(node: DefaultMutableTreeNode = treePathToNode(tree.getSelectionPaths.head)): Unit = {
+    val file = node.getUserObject.asInstanceOf[DxFile]
 
     val worker = new SwingWorker[Unit, File] {
       override def doInBackground(): Unit = {
-        node.getUserObject match {
-          case file: DxFile if file.isDirectory =>
-            val children = getChildren(file)
-
-            if (node.isLeaf) children.filter(_.isDirectory).foreach(publish(_))
-
-            setTableData(children)
-            setCurrentDirectoryInfo(file, children)
-        }
+        val children = getChildren(file)
+        children.filter(_.isDirectory).foreach(publish(_))
+        setTableData(children)
+        setCurrentDirectoryInfo(file, children)
       }
 
       override protected def process(children: util.List[File]): Unit = {
@@ -328,6 +327,7 @@ class DxFiler {
         children.asScala.foreach { child =>
           node.add(new DefaultMutableTreeNode(child))
         }
+        tree.getModel.asInstanceOf[DefaultTreeModel].reload(node)
       }
 
       override protected def done(): Unit = {}
@@ -543,7 +543,10 @@ class DxFiler {
               treePathToFile(info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath)
           }
 
-        WaitCursorWorker(frame, true)(() => Dx.upload(destDir, files.toArray(Array[File]())))(null).execute()
+        WaitCursorWorker(frame, true) { () =>
+          Dx.upload(destDir, files.toArray(Array[File]()))
+          refresh()
+        }(null).execute()
 
         // TODO REFRESH
       } match {
