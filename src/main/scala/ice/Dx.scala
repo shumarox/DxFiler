@@ -12,8 +12,8 @@ import java.nio.file.attribute.*
 import java.nio.file.spi.FileSystemProvider
 import java.text.SimpleDateFormat
 import java.util
-import java.util.Properties
 import java.util.concurrent.TimeUnit
+import java.util.{Date, Properties, TimeZone}
 import javax.net.ssl.HttpsURLConnection
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -214,6 +214,116 @@ object Dx {
     }
   }
 
+  def upload(dest: DxFile, files: Array[File]): Unit = {
+
+    case class Pair(dest: DxFile, source: File)
+
+    def toDxFile(parentDxFile: DxFile, files: Array[File]): List[Pair] = {
+      files.toList.flatMap { file =>
+        val dxFile = parentDxFile.toDxPath.resolveDx(file.getName).toDxFile
+
+        if (file.isDirectory) {
+          toDxFile(dxFile, file.listFiles)
+        } else if (file.length == 0) {
+          Nil
+        } else {
+          List(Pair(dxFile, file))
+        }
+      }
+    }
+
+    val pairs: Array[Pair] = toDxFile(dest, files).toArray
+
+    if (pairs.isEmpty) {
+      Dialog.showMessage(null, "空でないファイルがありません。", APP_NAME, Dialog.Message.Error)
+      return
+    }
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    val bodyForStart = s"""{"num_sessions": ${pairs.length}, "session_type": {".tag": "sequential"}}"""
+
+    val sessionIds =
+      processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/start_batch", "POST", properties, bodyForStart).match {
+        case Right(result) =>
+          val map = JsonUtil.jsonStringToMap(result)
+          map("session_ids").asInstanceOf[List[String]].toArray
+        case Left(result) =>
+          System.err.println(result)
+          throw new IllegalStateException(result)
+      }
+
+    val chunkSize = 128 * 1024 * 1024
+
+    (pairs zip sessionIds).foreach { case (Pair(_, source), sessionId) =>
+      var offset = 0L
+
+      Using.resource(new BufferedInputStream(new FileInputStream(source))) { is =>
+        while (offset < source.length) {
+          val close = offset + chunkSize >= source.length
+          val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/octet-stream",
+            "Dropbox-API-Arg" -> s"""{"cursor": {"session_id": "$sessionId", "offset": $offset}, "close": $close}"""
+          )
+
+          val limit = chunkSize min (source.length - offset).toInt
+
+          processHttpUpload("https://content.dropboxapi.com/2/files/upload_session/append_v2", "POST", properties, is, limit).match {
+            case Right(_) =>
+            case Left(result) =>
+              throw new IllegalStateException(result)
+          }
+
+          offset += chunkSize
+        }
+      }
+    }
+
+    @tailrec
+    def waitFinish(asyncJobId: String): String = {
+      Thread.sleep(200)
+
+      val body = s"""{"async_job_id": "$asyncJobId"}"""
+
+      processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/finish_batch/check", "POST", properties, body).match {
+        case Right(result) =>
+          val map = JsonUtil.jsonStringToMap(result)
+          if (map(".tag") == "in_progress") {
+            waitFinish(asyncJobId)
+          } else {
+            result
+          }
+        case Left(result) =>
+          System.err.println(result)
+          throw new IllegalStateException(result)
+      }
+    }
+
+    val entries =
+      (pairs zip sessionIds).map { case (Pair(dest, source), sessionId) =>
+        val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        val clientModified = sdf.format(source.lastModified).replaceAll(" ", "T") + "Z"
+        s"""{"cursor": {"session_id": "$sessionId", "offset": ${source.length}}, "commit": {"path": "${dest.toPath.toString}", "mode": {".tag": "overwrite"}, "autorename": false, "client_modified": "$clientModified", "strict_conflict": true}}"""
+      }
+
+    val bodyForFinish = s"""{"entries": [${entries.mkString(", ")}]}"""
+
+    processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/finish_batch_v2", "POST", properties, bodyForFinish).match {
+      case Right(resultFinish) =>
+        var result = resultFinish
+        var map: Map[String, Object] = JsonUtil.jsonStringToMap(result)
+
+        if (map.contains("async_job_id")) {
+          result = waitFinish(map("async_job_id").toString)
+          map = JsonUtil.jsonStringToMap(result)
+        } else if (map("entries").asInstanceOf[List[Map[String, Object]]].exists(_(".tag") != "success")) {
+          throw new IllegalStateException(result)
+        }
+      case Left(result) =>
+        System.err.println(result)
+        throw new IllegalStateException(result)
+    }
+  }
+
   private def escapeUnicode(s: String): String =
     s.map(c => if c <= 0x7f then c else String.format("\\u%04x", c.toInt)).mkString
 
@@ -236,7 +346,7 @@ object Dx {
   }
 
   private def processHttpRequest(url: String, method: String, properties: Map[String, String], body: Object): Either[String, String] = {
-    val conn: HttpsURLConnection = processHttpRequestSend(url, method, properties, body)
+    val conn: HttpURLConnection = processHttpRequestSend(url, method, properties, body)
 
     if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
       Right(readText(conn.getInputStream))
@@ -252,7 +362,7 @@ object Dx {
   }
 
   private def processHttpDownload(url: String, method: String, properties: Map[String, String], body: Object, fileName: String): Either[String, File] = {
-    val conn: HttpsURLConnection = processHttpRequestSend(url, method, properties, body)
+    val conn: HttpURLConnection = processHttpRequestSend(url, method, properties, body)
 
     if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
       Right(saveFile(conn.getInputStream, fileName))
@@ -261,7 +371,41 @@ object Dx {
     }
   }
 
-  private def processHttpRequestSend(url: String, method: String, properties: Map[String, String], body: Object) = {
+  private def processHttpUpload(url: String, method: String, properties: Map[String, String], is: InputStream, limit: Int): Either[String, String] = {
+    val conn = processHttpConnect(url, method, properties, is != null)
+
+    val bufferSize = 16 * 1024 * 1024
+    val buffer = new Array[Byte](bufferSize)
+
+    Using.resource(new BufferedOutputStream(conn.getOutputStream)) { os =>
+      var offset = 0
+      while (offset < limit) {
+        val len = is.read(buffer, 0, bufferSize min limit - offset)
+        os.write(buffer, 0, len)
+        offset += bufferSize
+      }
+    }
+
+    if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
+      Right(readText(conn.getInputStream))
+    } else {
+      Left(readText(conn.getErrorStream))
+    }
+  }
+
+  private def processHttpRequestSend(url: String, method: String, properties: Map[String, String], body: Object): HttpURLConnection = {
+    val conn = processHttpConnect(url, method, properties, body != null)
+
+    if (body != null) {
+      Using.resource(conn.getOutputStream) { os =>
+        os.write(body.toString.getBytes(StandardCharsets.UTF_8))
+      }
+    }
+
+    conn
+  }
+
+  private def processHttpConnect(url: String, method: String, properties: Map[String, String], doOutput: Boolean = true, doInput: Boolean = true): HttpURLConnection = {
     val conn = new URL(url).openConnection.asInstanceOf[HttpsURLConnection]
     if (IN_SECURE) {
       conn.setSSLSocketFactory(InSecureSSLContext.instance.getSocketFactory)
@@ -272,19 +416,9 @@ object Dx {
         conn.setRequestProperty(k, v)
       }
     }
-    conn.setDoOutput(body != null)
-    conn.setDoInput(true)
+    conn.setDoOutput(doOutput)
+    conn.setDoInput(doInput)
     conn.connect()
-
-    body match {
-      case null =>
-      case s: String =>
-        Using.resource(conn.getOutputStream) { os =>
-          os.write(s.getBytes(StandardCharsets.UTF_8))
-        }
-      case _ =>
-        System.err.println("Unsupported body object type. " + body.getClass)
-    }
     conn
   }
 }
@@ -401,7 +535,7 @@ private class DxPath(private val pathString: String, val dxFileAttributes: DxFil
 
   override def resolve(other: Path): Path = throw new NotImplementedError
 
-  override def resolve(other: String): Path = {
+  def resolveDx(other: String): DxPath = {
     if (other.isEmpty) {
       this
     } else {
@@ -409,6 +543,8 @@ private class DxPath(private val pathString: String, val dxFileAttributes: DxFil
       new DxPath(newPath, null)
     }
   }
+
+  override def resolve(other: String): Path = resolveDx(other)
 
   override def resolveSibling(other: Path): Path = throw new NotImplementedError
 
@@ -585,6 +721,8 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   override lazy val hashCode: Int = path.hashCode()
 
   override lazy val toString: String = toStringOrNull(path)
+
+  def toDxPath: DxPath = path
 
   override def toPath: Path = path
 }

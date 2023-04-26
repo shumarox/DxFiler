@@ -1,6 +1,7 @@
 package ice
 
 import java.awt.datatransfer.{DataFlavor, Transferable, UnsupportedFlavorException}
+import java.awt.dnd.DnDConstants
 import java.awt.event.InputEvent
 import java.awt.{Color, Desktop, Component as AComponent}
 import java.io.*
@@ -45,6 +46,7 @@ object DxFiler {
 
     frame = new Frame {
       title = APP_NAME
+
       override def closeOperation(): Unit = System.exit(0)
     }
 
@@ -202,7 +204,7 @@ class DxFiler {
     }
 
   private def getChildren(file: DxFile): Array[DxFile] =
-    file.listFiles.map(_.asInstanceOf[DxFile])sortWith {
+    file.listFiles.map(_.asInstanceOf[DxFile]) sortWith {
       case (f1: File, f2: File) =>
         if (f1.isDirectory && f2.isFile) true else if (f1.isFile && f2.isDirectory) false else f1.getName < f2.getName
     }
@@ -445,15 +447,17 @@ class DxFiler {
 
   private def treePathToNode: TreePath => DefaultMutableTreeNode = Option(_).map(_.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]).orNull
 
-  private def nodeToFile: DefaultMutableTreeNode => File = Option(_).map(_.getUserObject.asInstanceOf[DxFile]).orNull
+  private def nodeToFile: DefaultMutableTreeNode => DxFile = Option(_).map(_.getUserObject.asInstanceOf[DxFile]).orNull
+
+  private def treePathToFile: TreePath => DxFile = treePathToNode andThen nodeToFile
 
   private def treePathsToNodes: scala.collection.Seq[TreePath] => scala.collection.Seq[DefaultMutableTreeNode] = Option(_).map(_.map(treePathToNode)).getOrElse(Nil)
 
-  private def nodesToFiles: scala.collection.Seq[DefaultMutableTreeNode] => scala.collection.Seq[File] = Option(_).map(_.map(nodeToFile)).getOrElse(Nil)
+  private def nodesToFiles: scala.collection.Seq[DefaultMutableTreeNode] => scala.collection.Seq[DxFile] = Option(_).map(_.map(nodeToFile)).getOrElse(Nil)
 
-  private def treePathsToFiles: scala.collection.Seq[TreePath] => scala.collection.Seq[File] = treePathsToNodes andThen nodesToFiles
+  private def treePathsToFiles: scala.collection.Seq[TreePath] => scala.collection.Seq[DxFile] = treePathsToNodes andThen nodesToFiles
 
-  class DxFileTransferHandler extends TransferHandler {
+  private class DxFileTransferHandler extends TransferHandler {
 
     override protected def createTransferable(c: JComponent): Transferable = {
       val supportFlavors = Array[DataFlavor](DataFlavor.javaFileListFlavor)
@@ -466,7 +470,7 @@ class DxFiler {
             treePathsToFiles(tree.getSelectionPaths).toArray
         }
 
-      new Transferable() {
+      class FileTransferable extends Transferable {
         override def getTransferDataFlavors: Array[DataFlavor] = supportFlavors
 
         override def isDataFlavorSupported(flavor: DataFlavor): Boolean = supportFlavors.contains(flavor)
@@ -481,22 +485,63 @@ class DxFiler {
           }
         }
       }
+
+      new FileTransferable
     }
 
-    override def canImport(info: TransferHandler.TransferSupport): Boolean = false
+    override def canImport(info: TransferHandler.TransferSupport): Boolean = canImportImpl(info, info.getDropAction)
+
+    private def canImportImpl(info: TransferHandler.TransferSupport, dropAction: Int): Boolean = {
+      val flavor = List(DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
+
+      if (!info.isDrop || flavor == null) {
+        false
+      } else {
+        info.getComponent match {
+          case _: JTable | _: JScrollPane =>
+            true
+          case _: JTree =>
+            info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath != null
+        }
+      }
+    }
 
     override def getSourceActions(c: JComponent): Int = TransferHandler.COPY
 
-    override def importData(info: TransferHandler.TransferSupport): Boolean = false
+    override def importData(info: TransferHandler.TransferSupport): Boolean = {
+      if (!canImport(info)) return false
 
-    override def exportAsDrag(comp: JComponent, e: InputEvent, action: Int): Unit = {
-      frame.peer.getRootPane.setGlassPane(WaitCursorWorker.glassPane)
-      frame.peer.getRootPane.getGlassPane.setVisible(true)
-      super.exportAsDrag(comp, e, action)
-    }
+      val flavor = List(DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
 
-    override protected def exportDone(c: JComponent, data: Transferable, action: Int): Unit = {
-      frame.peer.getRootPane.getGlassPane.setVisible(false)
+      val files: util.List[File] =
+        Try(info.getTransferable.getTransferData(flavor).asInstanceOf[util.List[File]]) match {
+          case Success(f: util.List[File]) =>
+            f
+          case Failure(ex) =>
+            Dialog.showMessage(frame, "ファイルの取得に失敗しました。\n" + ex.toString)
+            return false
+        }
+
+      Try {
+        val destDir =
+          info.getComponent match {
+            case _: JTable | _: JScrollPane =>
+              Try(fileTableModel.files(table.viewToModelRow(info.getDropLocation.asInstanceOf[JTable.DropLocation].getRow))).getOrElse(treePathToFile(tree.getSelectionPath))
+            case _: JTree =>
+              treePathToFile(info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath)
+          }
+
+        WaitCursorWorker(frame, true)(() => Dx.upload(destDir, files.toArray(Array[File]())))(null).execute()
+
+        // TODO REFRESH
+      } match {
+        case Success(_) =>
+          true
+        case Failure(ex) =>
+          ex.printStackTrace()
+          Dialog.showMessage(frame, "アップロードに失敗しました。\n" + ex.toString)
+          false
+      }
     }
   }
 
@@ -505,6 +550,8 @@ class DxFiler {
   table.peer.setTransferHandler(handler)
   table.peer.setDropMode(DropMode.ON)
   table.peer.setDragEnabled(true)
+
+  tableScroll.peer.setTransferHandler(handler)
 
   tree.setTransferHandler(handler)
   tree.setDropMode(DropMode.ON)
