@@ -134,7 +134,9 @@ object Dx {
             map("entries").asInstanceOf[List[Map[String, String]]].map { entry =>
               val path: String = entry("path_display")
               val isDirectory: Boolean = entry(".tag") == "folder"
-              val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
+              val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+              sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+              val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
               val size: Long = if (isDirectory) 0L else Try(entry("size").toLong).getOrElse(0L)
               new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size))
             }.toArray

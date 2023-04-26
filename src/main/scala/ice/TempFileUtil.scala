@@ -12,7 +12,7 @@ object TempFileUtil {
   lazy val tempRootDir: File = new File(System.getProperty("java.io.tmpdir"))
 
   lazy val tempDir: File = {
-    val dir = new File(tempRootDir, "DxFiler" + new SimpleDateFormat("yyyyMMddhhmmss").format(new Date))
+    val dir = new File(tempRootDir, "DxFiler" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date))
     dir.mkdir
     dir.deleteOnExit()
     dir

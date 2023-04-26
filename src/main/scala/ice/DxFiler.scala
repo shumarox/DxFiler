@@ -428,7 +428,7 @@ class DxFiler {
         case "File" => file.getName
         case "Ext" => if (file.getName.contains(".")) file.getName.substring(file.getName.lastIndexOf(".") + 1) else ""
         case "Size" => if (file.isDirectory) null else java.lang.Long.valueOf(file.length)
-        case "Last Modified" => if (file.lastModified <= 0) null else new SimpleDateFormat("yyyy/MM/dd hh:mm:ss").format(new Date(file.lastModified))
+        case "Last Modified" => if (file.lastModified <= 0) null else new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date(file.lastModified))
       }
     }
 
