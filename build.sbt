@@ -1,5 +1,5 @@
 name := "DxFiler"
-version := "1.0"
+version := "0.0.2"
 
 scalaVersion := "3.2.2"
 
