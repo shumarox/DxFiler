@@ -2,7 +2,7 @@ package ice
 
 import java.awt.datatransfer.{DataFlavor, Transferable, UnsupportedFlavorException}
 import java.awt.dnd.DnDConstants
-import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, KeyListener}
+import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, KeyListener, MouseAdapter, MouseEvent}
 import java.awt.{Color, Desktop, Component as AComponent}
 import java.io.*
 import java.net.{URI, URL}
@@ -96,7 +96,7 @@ class DxFiler {
 
   private val table: FileTable = new FileTable
 
-  private def popupMenu: PopupMenu = new PopupMenu {
+  private def tablePopupMenu: PopupMenu = new PopupMenu {
     private def createMenuItem(label: String, mnemonic: Key.Value)(f: => Unit): MenuItem = {
       val action = Action(label) {
         executeAndShowError {
@@ -163,7 +163,7 @@ class DxFiler {
       ev.consume()
     case ev: MouseClicked
       if ev.clicks == 1 && (ev.modifiers & InputEvent.META_DOWN_MASK) != 0 =>
-      popupMenu.show(table, ev.point.x, ev.point.y)
+      tablePopupMenu.show(table, ev.point.x, ev.point.y)
     case ev: MouseClicked =>
       ev.consume()
     case ev: KeyPressed if ev.key == Key.Enter && ev.modifiers == 0 =>
@@ -190,7 +190,7 @@ class DxFiler {
       val rx = (r.x + r.width) min table.peer.getParent.getWidth
       val ry = (r.y + r.height) min table.peer.getParent.getHeight
 
-      popupMenu.show(table, rx, ry)
+      tablePopupMenu.show(table, rx, ry)
 
       ev.consume()
     case ev: KeyPressed if ev.key == Key.F5 =>
@@ -245,8 +245,42 @@ class DxFiler {
             }(null).execute()
           case _ =>
         }
+      } else if (ev.getKeyCode == KeyEvent.VK_CONTEXT_MENU) {
+        ev.consume()
+        val r = tree.getPathBounds(tree.getSelectionPath)
+
+        val rx = (r.x + r.width) min table.peer.getParent.getWidth
+        val ry = (r.y + r.height) min table.peer.getParent.getHeight
+
+        showTreePopupMenu(tree, rx, ry)
       }
     }
+  }
+
+
+  def showTreePopupMenu(component: JComponent, x: Int, y: Int): Unit = {
+    new PopupMenu {
+      private def createMenuItem(label: String, mnemonic: Key.Value)(f: => Unit): MenuItem = {
+        val action = Action(label) {
+          executeAndShowError {
+            f
+          }
+        }
+
+        val menuItem = new MenuItem(action)
+        menuItem.mnemonic = mnemonic
+        menuItem
+      }
+
+      contents +=
+        createMenuItem("Delete", Key.D) {
+          val file = treePathToFile(tree.getSelectionPath)
+          WaitCursorWorker(frame, true) { () =>
+            Dx.delete(file.toPath.toString)
+            tree.setSelectionPath(tree.getSelectionPath.getParentPath)
+          }(null).execute()
+        }
+    }.show(Component.wrap(component), x, y)
   }
 
   private def getChildren(file: DxFile): Array[DxFile] =
@@ -286,6 +320,19 @@ class DxFiler {
     setCellRenderer(new FileTreeCellRenderer(getCellRenderer))
     expandRow(0)
     setVisibleRowCount(15)
+
+    addMouseListener(new MouseAdapter {
+      override def mouseClicked(ev: MouseEvent): Unit = {
+        if (ev.getClickCount == 1 && ev.getModifiersEx == InputEvent.META_DOWN_MASK) {
+          ev.consume()
+          val treePath = getPathForLocation(ev.getX, ev.getY)
+          if (treePath != null) {
+            if (getSelectionPaths == null || !getSelectionPaths.contains(treePath)) tree.setSelectionPath(treePath)
+            showTreePopupMenu(tree, ev.getX, ev.getY)
+          }
+        }
+      }
+    })
   }
 
   private def executeAndShowError(f: => Unit): Unit = {
