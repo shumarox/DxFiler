@@ -2,7 +2,7 @@ package ice
 
 import java.awt.datatransfer.{DataFlavor, Transferable, UnsupportedFlavorException}
 import java.awt.dnd.DnDConstants
-import java.awt.event.InputEvent
+import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, KeyListener}
 import java.awt.{Color, Desktop, Component as AComponent}
 import java.io.*
 import java.net.{URI, URL}
@@ -193,6 +193,9 @@ class DxFiler {
       popupMenu.show(table, rx, ry)
 
       ev.consume()
+    case ev: KeyPressed if ev.key == Key.F5 =>
+      refresh()
+      ev.consume()
   }
 
   private def getSelectedFiles: List[DxFile] =
@@ -217,6 +220,10 @@ class DxFiler {
       val node = tse.getPath.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]
       WaitCursorWorker(frame, true)(() => refresh(node))(null).execute()
     }
+
+  private val treeKeyListener: KeyListener = new KeyAdapter {
+    override def keyPressed(ev: KeyEvent): Unit = if (ev.getKeyCode == KeyEvent.VK_F5) refresh()
+  }
 
   private def getChildren(file: DxFile): Array[DxFile] =
     file.listFiles.map(_.asInstanceOf[DxFile]) sortWith {
@@ -251,6 +258,7 @@ class DxFiler {
 
     setRootVisible(false)
     addTreeSelectionListener(treeSelectionListener)
+    addKeyListener(treeKeyListener)
     setCellRenderer(new FileTreeCellRenderer(getCellRenderer))
     expandRow(0)
     setVisibleRowCount(15)
