@@ -196,6 +196,16 @@ class DxFiler {
     case ev: KeyPressed if ev.key == Key.F5 =>
       refresh()
       ev.consume()
+    case ev: KeyPressed if ev.key == Key.Delete =>
+      Dialog.showConfirmation(frame, "削除しますか？", APP_NAME, Dialog.Options.OkCancel) match {
+        case Dialog.Result.Ok =>
+          getSelectedFiles.foreach { file =>
+            executeAndShowError {
+              deleteFile(file)
+            }
+          }
+        case _ =>
+      }
   }
 
   private def getSelectedFiles: List[DxFile] =
@@ -222,7 +232,21 @@ class DxFiler {
     }
 
   private val treeKeyListener: KeyListener = new KeyAdapter {
-    override def keyPressed(ev: KeyEvent): Unit = if (ev.getKeyCode == KeyEvent.VK_F5) refresh()
+    override def keyPressed(ev: KeyEvent): Unit = {
+      if (ev.getKeyCode == KeyEvent.VK_F5) {
+        refresh()
+      } else if (ev.getKeyCode == KeyEvent.VK_DELETE) {
+        Dialog.showConfirmation(frame, "削除しますか？", APP_NAME, Dialog.Options.OkCancel) match {
+          case Dialog.Result.Ok =>
+            val file = treePathToFile(tree.getSelectionPath)
+            WaitCursorWorker(frame, true) { () =>
+              Dx.delete(file.toPath.toString)
+              tree.setSelectionPath(tree.getSelectionPath.getParentPath)
+            }(null).execute()
+          case _ =>
+        }
+      }
+    }
   }
 
   private def getChildren(file: DxFile): Array[DxFile] =
