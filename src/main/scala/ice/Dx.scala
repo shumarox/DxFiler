@@ -376,6 +376,25 @@ object Dx {
     }
   }
 
+  def createFolder(path: String): Either[String, String] = {
+    ensureAccessToken()
+
+    val body = s"""{"path": "$path"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/files/create_folder_v2", "POST", properties, body)
+  }
+
+  def createFolderWithErrorMessage(path: String): Unit = {
+    createFolder(path).match {
+      case Right(_) =>
+      case Left(result) =>
+        System.err.println(result)
+        Dialog.showMessage(null, "フォルダの作成に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Array[DxPath]()
+    }
+  }
+
   private def escapeUnicode(s: String): String =
     s.map(c => if c <= 0x7f then c else String.format("\\u%04x", c.toInt)).mkString
 

@@ -110,6 +110,21 @@ class DxFiler {
         menuItem
       }
 
+      if (getSelectedFiles.isEmpty) {
+        contents +=
+          createMenuItem("CreateFolder", Key.F) {
+            Dialog.showInput(frame, "フォルダ名", APP_NAME, initial = "") match {
+              case Some(name) =>
+                WaitCursorWorker(frame, true) { () =>
+                  val parent = treePathToFile(tree.getSelectionPath)
+                  Dx.createFolderWithErrorMessage(parent.toDxPath.resolveDx(name).toString)
+                  refresh()
+                }(null).execute()
+              case _ =>
+            }
+          }
+      }
+
       if (getSelectedFiles.nonEmpty) {
         if (desktop.isSupported(Desktop.Action.OPEN)) {
           contents +=
@@ -237,7 +252,7 @@ class DxFiler {
       }
       ev.consume()
     case ev: KeyPressed if ev.key == Key.Delete =>
-      if (getSelectedFiles.nonEmpty ) {
+      if (getSelectedFiles.nonEmpty) {
         Dialog.showConfirmation(frame, "削除しますか？", APP_NAME, Dialog.Options.OkCancel) match {
           case Dialog.Result.Ok =>
             getSelectedFiles.foreach { file =>
@@ -343,6 +358,14 @@ class DxFiler {
 
   private val tableScroll: ScrollPane = new ScrollPane(table) {
     preferredSize = new Dimension(800, preferredSize.getHeight.toInt)
+
+    listenTo(mouse.clicks, horizontalScrollBar.mouse.clicks, verticalScrollBar.mouse.clicks)
+    reactions += {
+      case ev@MouseClicked(source, point, Key.Modifier.Meta, 1, _) =>
+        ev.consume()
+        table.selection.rows.clear()
+        showTablePopupMenu(source, point.x, point.y)
+    }
   }
 
   private val tablePanel: BorderPanel = new BorderPanel {
