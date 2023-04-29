@@ -327,7 +327,16 @@ object Dx {
     }
   }
 
-  def delete(path: String): Unit = {
+  def copy(from: String, to: String): Either[String, String] = {
+    ensureAccessToken()
+
+    val body = s"""{"from_path": "$from", "to_path": "$to"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/files/copy_v2", "POST", properties, body)
+  }
+
+  def delete(path: String): Either[String, String] = {
     ensureAccessToken()
 
     if (path == "/") throw new IllegalArgumentException("can't remove root path")
@@ -335,11 +344,34 @@ object Dx {
     val body = s"""{"path": "$path"}"""
 
     val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
-    processHttpRequest("https://api.dropboxapi.com/2/files/delete_v2", "POST", properties, body).match {
+    processHttpRequest("https://api.dropboxapi.com/2/files/delete_v2", "POST", properties, body)
+  }
+
+  def deleteWithErrorMessage(path: String): Unit = {
+    delete(path).match {
       case Right(_) =>
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Dialog.showMessage(null, "削除に失敗しました。", APP_NAME, Dialog.Message.Error)
+        Array[DxPath]()
+    }
+  }
+
+  def rename(from: String, to: String): Either[String, String] = {
+    copy(from, to) match {
+      case Right(_) =>
+        delete(from)
+      case Left(result) =>
+        Left(result)
+    }
+  }
+
+  def renameWithErrorMessage(from: String, to: String): Unit = {
+    rename(from, to).match {
+      case Right(_) =>
+      case Left(result) =>
+        System.err.println(result)
+        Dialog.showMessage(null, "名前の変更に失敗しました。", APP_NAME, Dialog.Message.Error)
         Array[DxPath]()
     }
   }
