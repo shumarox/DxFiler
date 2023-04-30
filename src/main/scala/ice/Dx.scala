@@ -565,7 +565,7 @@ object DxFileSystem extends FileSystem {
   override def newWatchService(): WatchService = throw new NotImplementedError
 }
 
-private class DxPath(private val pathString: String, val dxFileAttributes: DxFileAttributes) extends Path {
+private class DxPath(private val pathString: String, @transient val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
 
   override def getFileSystem: FileSystem = DxFileSystem
 

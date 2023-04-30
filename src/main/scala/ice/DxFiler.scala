@@ -559,10 +559,12 @@ class DxFiler {
 
   private class DxFileTransferHandler extends TransferHandler {
 
-    override protected def createTransferable(c: JComponent): Transferable = {
-      val supportFlavors = Array[DataFlavor](DataFlavor.javaFileListFlavor)
+    private object DxFileListFlavor extends DataFlavor(classOf[List[DxFile]], "DxFilerFileFlavor")
 
-      val fileList: Array[File] =
+    override protected def createTransferable(c: JComponent): Transferable = {
+      val supportFlavors = Array[DataFlavor](DxFileListFlavor, DataFlavor.javaFileListFlavor)
+
+      val fileList: Array[DxFile] =
         c match {
           case _: JTable | _: JScrollPane =>
             table.selection.rows.map(table.viewToModelRow).map(fileTableModel.files(_)).toArray
@@ -576,7 +578,9 @@ class DxFiler {
         override def isDataFlavorSupported(flavor: DataFlavor): Boolean = supportFlavors.contains(flavor)
 
         override def getTransferData(flavor: DataFlavor): Object = {
-          if (flavor == DataFlavor.javaFileListFlavor) {
+          if (flavor == DxFileListFlavor) {
+            util.Arrays.asList(fileList: _*)
+          } else if (flavor == DataFlavor.javaFileListFlavor) {
             util.Arrays.asList(fileList.map {
               case file: DxFile => Option(file.downloaded).getOrElse(Dx.download(file))
             }: _*)
@@ -589,10 +593,8 @@ class DxFiler {
       new FileTransferable
     }
 
-    override def canImport(info: TransferHandler.TransferSupport): Boolean = canImportImpl(info, info.getDropAction)
-
-    private def canImportImpl(info: TransferHandler.TransferSupport, dropAction: Int): Boolean = {
-      val flavor = List(DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
+    override def canImport(info: TransferHandler.TransferSupport): Boolean = {
+      val flavor = List(DxFileListFlavor, DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
 
       if (!info.isDrop || flavor == null) {
         false
@@ -611,8 +613,16 @@ class DxFiler {
     override def importData(info: TransferHandler.TransferSupport): Boolean = {
       if (!canImport(info)) return false
 
-      val flavor = List(DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
+      val flavor = List(DxFileListFlavor, DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
 
+      if (flavor == DxFileListFlavor) {
+        copyDroppedFiles(info, flavor)
+      } else {
+        uploadDroppedFiles(info, flavor)
+      }
+    }
+
+    private def uploadDroppedFiles(info: TransferHandler.TransferSupport, flavor: DataFlavor): Boolean = {
       val files: util.List[File] =
         Try(info.getTransferable.getTransferData(flavor).asInstanceOf[util.List[File]]) match {
           case Success(f: util.List[File]) =>
@@ -636,13 +646,54 @@ class DxFiler {
           refresh()
         }(null).execute()
 
-        // TODO REFRESH
       } match {
         case Success(_) =>
           true
         case Failure(ex) =>
           ex.printStackTrace()
           Dialog.showMessage(frame, "アップロードに失敗しました。\n" + ex.toString)
+          false
+      }
+    }
+
+    private def copyDroppedFiles(info: TransferHandler.TransferSupport, flavor: DataFlavor): Boolean = {
+      val files: util.List[DxFile] =
+        Try(info.getTransferable.getTransferData(flavor).asInstanceOf[util.List[DxFile]]) match {
+          case Success(f: util.List[DxFile]) =>
+            f
+          case Failure(ex) =>
+            Dialog.showMessage(frame, "ファイルの取得に失敗しました。\n" + ex.toString)
+            return false
+        }
+
+      Try {
+        val destDir =
+          info.getComponent match {
+            case _: JTable | _: JScrollPane =>
+              Try(fileTableModel.files(table.viewToModelRow(info.getDropLocation.asInstanceOf[JTable.DropLocation].getRow))).getOrElse(treePathToFile(tree.getSelectionPath))
+            case _: JTree =>
+              treePathToFile(info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath)
+          }
+
+        WaitCursorWorker(frame, true) { () =>
+          files.asScala.foreach { file =>
+            Dx.copy(file.toPath.toString, destDir.toDxPath.resolve(file.getName).toString) match {
+              case Right(_) =>
+              case Left(result) =>
+                System.err.println(result)
+                Dialog.showMessage(null, "コピーに失敗しました。", APP_NAME, Dialog.Message.Error)
+                Array[DxPath]()
+            }
+          }
+          refresh()
+        }(null).execute()
+
+      } match {
+        case Success(_) =>
+          true
+        case Failure(ex) =>
+          ex.printStackTrace()
+          Dialog.showMessage(frame, "移動に失敗しました。\n" + ex.toString)
           false
       }
     }
