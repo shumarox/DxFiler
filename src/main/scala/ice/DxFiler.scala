@@ -295,10 +295,10 @@ class DxFiler {
   }
 
   private def getChildren(file: DxFile): Array[DxFile] =
-    Dx.list(file.toPath.toString).map(_.toDxFile) sortWith {
+    file.listFiles.sortWith {
       case (f1: File, f2: File) =>
         if (f1.isDirectory && f2.isFile) true else if (f1.isFile && f2.isDirectory) false else f1.getName < f2.getName
-    }
+    }.asInstanceOf[Array[DxFile]]
 
   private def getDirectoryChildren(file: DxFile): Array[DxFile] =
     getChildren(file).filter {

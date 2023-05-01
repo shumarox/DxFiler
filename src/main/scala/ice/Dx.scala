@@ -113,9 +113,9 @@ object Dx {
 
   private var lastListFilePath: String = _
   private var lastListFileTime: Long = 0L
-  private var lastListFileResult: Array[DxPath] = _
+  private var lastListFileResult: Array[DxFile] = _
 
-  def list(path: String): Array[DxPath] = {
+  def list(path: String): Array[DxFile] = {
     ensureAccessToken()
 
     if (path == lastListFilePath && System.currentTimeMillis - lastListFileTime < 100) {
@@ -136,7 +136,7 @@ object Dx {
               sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
               val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
               val size: Long = if (isDirectory) 0L else Try(entry("size").toLong).getOrElse(0L)
-              new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size))
+              new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
             }.toArray
           lastListFilePath = path
           lastListFileTime = System.currentTimeMillis()
@@ -144,7 +144,7 @@ object Dx {
         case Left(result) =>
           System.err.println(result)
           Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
-          Array[DxPath]()
+          Array[DxFile]()
       }
     }
   }
@@ -564,7 +564,7 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
 
   override def register(watcher: WatchService, events: Array[? <: WatchEvent.Kind[_]]): WatchKey = throw new NotImplementedError
 
-  override def iterator(): java.util.Iterator[Path] = util.Arrays.asList(Dx.list(pathString): _*).iterator
+  override def iterator(): java.util.Iterator[Path] = util.Arrays.asList(Dx.list(pathString).map(_.toPath): _*).iterator
 
   override def compareTo(other: Path): Int = throw new NotImplementedError
 
@@ -657,11 +657,11 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def list(filter: FilenameFilter): Array[String] = Files.newDirectoryStream(path).iterator.asScala.filter(f => filter.accept(this, toStringOrNull(f.getFileName))).map(f => toStringOrNull(f.getFileName)).toArray
 
-  override def listFiles: Array[File] = Files.newDirectoryStream(path).iterator.asScala.map(_.toFile.asInstanceOf[DxFile]).toArray
+  override def listFiles: Array[File] = Dx.list(path.toString).asInstanceOf[Array[File]]
 
-  override def listFiles(filter: FilenameFilter): Array[File] = Files.newDirectoryStream(path).iterator.asScala.filter(f => filter.accept(this, toStringOrNull(f.getFileName))).map(_.asInstanceOf[DxFile]).toArray
+  override def listFiles(filter: FilenameFilter): Array[File] = listFiles.filter(f => filter.accept(this, toStringOrNull(path)))
 
-  override def listFiles(filter: FileFilter): Array[File] = Files.newDirectoryStream(path).iterator.asScala.map(_.asInstanceOf[DxFile]).filter(filter.accept).toArray
+  override def listFiles(filter: FileFilter): Array[File] = listFiles.filter(filter.accept)
 
   override def mkdir: Boolean = Try(Files.createDirectory(path)).isSuccess
 
