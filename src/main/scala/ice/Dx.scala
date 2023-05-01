@@ -3,13 +3,11 @@ package ice
 import net.lingala.zip4j.ZipFile
 
 import java.awt.Desktop
-import java.io.{FileSystem, *}
+import java.io.*
 import java.net.{HttpURLConnection, URI, URL}
-import java.nio.channels.SeekableByteChannel
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.*
 import java.nio.file.attribute.*
-import java.nio.file.spi.FileSystemProvider
 import java.text.SimpleDateFormat
 import java.util
 import java.util.concurrent.TimeUnit
@@ -494,80 +492,9 @@ object Dx {
   }
 }
 
-object DxFileSystemProvider extends FileSystemProvider {
-
-  override def getScheme: String = "dx"
-
-  override def newFileSystem(uri: URI, env: java.util.Map[String, _]): FileSystem = DxFileSystem
-
-  override def getFileSystem(uri: URI): FileSystem = DxFileSystem
-
-  override def getPath(uri: URI): Path = DxFileSystem.getPath(uri.getSchemeSpecificPart)
-
-  override def newByteChannel(path: Path, options: java.util.Set[_ <: OpenOption], attrs: FileAttribute[_]*): SeekableByteChannel = ???
-
-  override def newDirectoryStream(dir: Path, filter: DirectoryStream.Filter[_ >: Path]): DirectoryStream[Path] =
-    new DxDirectoryStream(dir.asInstanceOf[DxPath], filter)
-
-  override def createDirectory(dir: Path, attrs: FileAttribute[_]*): Unit = throw new NotImplementedError
-
-  override def delete(path: Path): Unit = ???
-
-  override def copy(source: Path, target: Path, options: CopyOption*): Unit = throw new NotImplementedError
-
-  override def move(source: Path, target: Path, options: CopyOption*): Unit = throw new NotImplementedError
-
-  override def isSameFile(path: Path, path2: Path): Boolean = throw new NotImplementedError
-
-  override def isHidden(path: Path): Boolean = throw new NotImplementedError
-
-  override def getFileStore(path: Path): FileStore = throw new NotImplementedError
-
-  override def checkAccess(path: Path, modes: AccessMode*): Unit = {
-    Dx.ensureRefreshToken()
-    Dx.ensureAccessToken()
-  }
-
-  override def getFileAttributeView[V <: FileAttributeView](path: Path, `type`: Class[V], options: LinkOption*): V = throw new NotImplementedError
-
-  override def readAttributes[A <: BasicFileAttributes](path: Path, `type`: Class[A], options: Array[? <: LinkOption]): A =
-    path.asInstanceOf[DxPath].dxFileAttributes.asInstanceOf[A]
-
-  override def readAttributes(path: Path, attributes: String, options: Array[? <: LinkOption]): java.util.Map[String, AnyRef] = throw new NotImplementedError
-
-  override def setAttribute(path: Path, attribute: String, value: Any, options: LinkOption*): Unit = throw new NotImplementedError
-}
-
-object DxFileSystem extends FileSystem {
-
-  override def provider: FileSystemProvider = DxFileSystemProvider
-
-  override def close(): Unit = {}
-
-  override def isOpen: Boolean = true
-
-  override def isReadOnly: Boolean = throw new NotImplementedError
-
-  override def getSeparator: String = "/"
-
-  override def getRootDirectories: java.lang.Iterable[Path] = List[Path](DxRootPath).asJava
-
-  override def getFileStores: java.lang.Iterable[FileStore] = throw new NotImplementedError
-
-  override def supportedFileAttributeViews(): java.util.Set[String] = throw new NotImplementedError
-
-  override def getPath(first: String, more: String*): Path = throw new NotImplementedError
-
-  override def getPathMatcher(syntaxAndPattern: String): PathMatcher = throw new NotImplementedError
-
-  override def getUserPrincipalLookupService: UserPrincipalLookupService = throw new NotImplementedError
-
-  override def newWatchService(): WatchService = throw new NotImplementedError
-}
-
 private class DxPath(private val pathString: String, @transient val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
 
-  override def getFileSystem: FileSystem = DxFileSystem
+  override def getFileSystem: FileSystem = throw new UnsupportedOperationException
 
   override def isAbsolute: Boolean = pathString.startsWith("/")
 
@@ -648,7 +575,7 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
       case null =>
         false
       case that: DxPath =>
-        this.getFileSystem == that.getFileSystem && this.pathString == that.pathString
+        this.pathString == that.pathString
       case _ =>
         false
     }
@@ -658,12 +585,6 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
 }
 
 object DxRootPath extends DxPath("/", RootFileAttributes)
-
-private class DxDirectoryStream(val dxPath: DxPath, filter: DirectoryStream.Filter[_ >: Path]) extends DirectoryStream[Path] {
-  override def iterator: java.util.Iterator[Path] = dxPath.iterator()
-
-  override def close(): Unit = ()
-}
 
 private class DxFileAttributes(override val isDirectory: Boolean, override val lastModifiedTime: FileTime, override val size: Long) extends BasicFileAttributes {
   override def creationTime: FileTime = null
@@ -716,15 +637,15 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def exists: Boolean = Files.exists(path)
 
-  override def isDirectory: Boolean = Files.isDirectory(path)
+  override def isDirectory: Boolean = path.dxFileAttributes.isDirectory
 
-  override def isFile: Boolean = Files.isRegularFile(path) || Files.isSymbolicLink(path)
+  override def isFile: Boolean = path.dxFileAttributes.isRegularFile || path.dxFileAttributes.isSymbolicLink
 
   override def isHidden: Boolean = Files.isHidden(path)
 
   override def lastModified: Long = Try(Files.getLastModifiedTime(path).toMillis).getOrElse(0L)
 
-  override def length: Long = Files.size(path)
+  override def length: Long = path.dxFileAttributes.size
 
   override def createNewFile: Boolean = Try(Files.createFile(path)).isSuccess
 
@@ -775,7 +696,7 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   override def compareTo(pathname: File): Int = path.compareTo(pathname.toPath)
 
   private def equalsPath(that: Path): Boolean = {
-    if (that == null || this.path.getClass != that.getClass || (this.path.getFileSystem ne that.getFileSystem)) return false
+    if (that == null || this.path.getClass != that.getClass) return false
     toStringOrNull(this.path.toAbsolutePath) == toStringOrNull(that.toAbsolutePath)
   }
 

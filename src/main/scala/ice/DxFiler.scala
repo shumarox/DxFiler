@@ -6,13 +6,10 @@ import java.awt.event.*
 import java.awt.{Color, Desktop, Component as AComponent}
 import java.io.*
 import java.net.{URI, URL}
-import java.nio.file.attribute.PosixFilePermission.*
-import java.nio.file.attribute.{BasicFileAttributes, FileTime, PosixFileAttributes}
-import java.nio.file.{FileSystems, Files, LinkOption, Path}
+import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Date
-import java.util.concurrent.TimeUnit
 import javax.swing.*
 import javax.swing.border.*
 import javax.swing.event.*
@@ -298,7 +295,7 @@ class DxFiler {
   }
 
   private def getChildren(file: DxFile): Array[DxFile] =
-    file.listFiles.map(_.asInstanceOf[DxFile]) sortWith {
+    Dx.list(file.toPath.toString).map(_.toDxFile) sortWith {
       case (f1: File, f2: File) =>
         if (f1.isDirectory && f2.isFile) true else if (f1.isFile && f2.isDirectory) false else f1.getName < f2.getName
     }
