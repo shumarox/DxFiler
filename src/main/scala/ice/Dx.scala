@@ -160,7 +160,7 @@ object Dx {
   def downloadFile(file: DxFile): File = {
     ensureAccessToken()
 
-    val path = file.toPath.toString
+    val path = file.toString
 
     val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "${escapeUnicode(path)}"}""")
     processHttpDownload("https://content.dropboxapi.com/2/files/download", "POST", properties, null, path.substring(path.lastIndexOf("/") + 1)).match {
@@ -177,7 +177,7 @@ object Dx {
   def downloadFolder(file: DxFile): File = {
     ensureAccessToken()
 
-    val path = file.toPath.toString
+    val path = file.toString
 
     val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Dropbox-API-Arg" -> s"""{"path": "${escapeUnicode(path)}"}""")
     processHttpDownload("https://content.dropboxapi.com/2/files/download_zip", "POST", properties, null, file.getName + ".zip").match {
@@ -303,7 +303,7 @@ object Dx {
         val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
         val clientModified = sdf.format(source.lastModified).replaceAll(" ", "T") + "Z"
-        s"""{"cursor": {"session_id": "$sessionId", "offset": ${source.length}}, "commit": {"path": "${dest.toPath.toString}", "mode": {".tag": "overwrite"}, "autorename": false, "client_modified": "$clientModified", "strict_conflict": true}}"""
+        s"""{"cursor": {"session_id": "$sessionId", "offset": ${source.length}}, "commit": {"path": "$dest", "mode": {".tag": "overwrite"}, "autorename": false, "client_modified": "$clientModified", "strict_conflict": true}}"""
       }
 
     val bodyForFinish = s"""{"entries": [${entries.mkString(", ")}]}"""

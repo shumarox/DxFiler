@@ -162,7 +162,7 @@ class DxFiler {
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
 
   private def renameFile(file: DxFile): Unit = {
-    if (file.toPath.toString == "/") throw new IllegalArgumentException("can't rename root path")
+    if (file.toString == "/") throw new IllegalArgumentException("can't rename root path")
 
     var toFile: DxFile = null
 
@@ -171,7 +171,7 @@ class DxFiler {
         Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName) match {
           case Some(name: String) =>
             toFile = file.toDxPath.parent.resolveDx(name).toDxFile
-            Dx.renameWithErrorMessage(file.toPath.toString, toFile.toPath.toString)
+            Dx.renameWithErrorMessage(file.toString, toFile.toString)
             refresh()
           case None =>
         }
@@ -182,7 +182,7 @@ class DxFiler {
 
   private def deleteFile(file: DxFile): Unit =
     WaitCursorWorker(frame, true) { () =>
-      Dx.deleteWithErrorMessage(file.toPath.toString)
+      Dx.deleteWithErrorMessage(file.toString)
       refresh()
     }(null).execute()
 
@@ -674,7 +674,7 @@ class DxFiler {
 
         WaitCursorWorker(frame, true) { () =>
           files.asScala.foreach { file =>
-            Dx.copy(file.toPath.toString, destDir.toDxPath.resolve(file.getName).toString) match {
+            Dx.copy(file.toString, destDir.toDxPath.resolve(file.getName).toString) match {
               case Right(_) =>
               case Left(result) =>
                 System.err.println(result)
