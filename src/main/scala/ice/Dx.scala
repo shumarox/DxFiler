@@ -635,27 +635,27 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def canWrite: Boolean = false
 
-  override def exists: Boolean = Files.exists(path)
+  override def exists: Boolean = ???
 
   override def isDirectory: Boolean = path.dxFileAttributes.isDirectory
 
   override def isFile: Boolean = path.dxFileAttributes.isRegularFile || path.dxFileAttributes.isSymbolicLink
 
-  override def isHidden: Boolean = Files.isHidden(path)
+  override def isHidden: Boolean = throw new UnsupportedOperationException
 
   override def lastModified: Long = Try(Files.getLastModifiedTime(path).toMillis).getOrElse(0L)
 
   override def length: Long = path.dxFileAttributes.size
 
-  override def createNewFile: Boolean = Try(Files.createFile(path)).isSuccess
+  override def createNewFile: Boolean = throw new UnsupportedOperationException
 
-  override def delete: Boolean = Try(Files.delete(path)).isSuccess
+  override def delete: Boolean = throw new UnsupportedOperationException
 
   override def deleteOnExit(): Unit = throw new UnsupportedOperationException
 
-  override def list: Array[String] = Files.newDirectoryStream(path).iterator.asScala.map(f => toStringOrNull(f.getFileName)).toArray
+  override def list: Array[String] = throw new UnsupportedOperationException
 
-  override def list(filter: FilenameFilter): Array[String] = Files.newDirectoryStream(path).iterator.asScala.filter(f => filter.accept(this, toStringOrNull(f.getFileName))).map(f => toStringOrNull(f.getFileName)).toArray
+  override def list(filter: FilenameFilter): Array[String] = throw new UnsupportedOperationException
 
   override def listFiles: Array[File] = Dx.list(path.toString).asInstanceOf[Array[File]]
 
@@ -663,15 +663,15 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def listFiles(filter: FileFilter): Array[File] = listFiles.filter(filter.accept)
 
-  override def mkdir: Boolean = Try(Files.createDirectory(path)).isSuccess
+  override def mkdir: Boolean = throw new UnsupportedOperationException
 
-  override def mkdirs: Boolean = Try(Files.createDirectories(path)).isSuccess
+  override def mkdirs: Boolean = throw new UnsupportedOperationException
 
-  override def renameTo(dest: File): Boolean = Try(Files.move(path, dest.toPath)).isSuccess
+  override def renameTo(dest: File): Boolean = throw new UnsupportedOperationException
 
-  override def setLastModified(time: Long): Boolean = Try(Files.setLastModifiedTime(path, FileTime.from(time, TimeUnit.MILLISECONDS))).isSuccess
+  override def setLastModified(time: Long): Boolean = throw new UnsupportedOperationException
 
-  override def setReadOnly(): Boolean = Try(Files.setAttribute(path, "dos:readonly", true)).isSuccess
+  override def setReadOnly(): Boolean = throw new UnsupportedOperationException
 
   override def setWritable(writable: Boolean, ownerOnly: Boolean): Boolean = throw new UnsupportedOperationException
 
@@ -687,11 +687,11 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def canExecute: Boolean = false
 
-  override def getTotalSpace: Long = Files.getFileStore(path).getTotalSpace
+  override def getTotalSpace: Long = throw new UnsupportedOperationException
 
-  override def getFreeSpace: Long = Files.getFileStore(path).getUnallocatedSpace
+  override def getFreeSpace: Long = throw new UnsupportedOperationException
 
-  override def getUsableSpace: Long = Files.getFileStore(path).getUsableSpace
+  override def getUsableSpace: Long = throw new UnsupportedOperationException
 
   override def compareTo(pathname: File): Int = path.compareTo(pathname.toPath)
 
