@@ -220,7 +220,7 @@ object Dx {
 
     def toDxFile(parentDxFile: DxFile, files: Array[File]): List[Pair] = {
       files.toList.flatMap { file =>
-        val dxFile = parentDxFile.toDxPath.resolveDx(file.getName).toDxFile
+        val dxFile = new DxFile(parentDxFile, file)
 
         if (file.isDirectory) {
           toDxFile(dxFile, file.listFiles)
@@ -494,6 +494,10 @@ object Dx {
 
 private class DxPath(private val pathString: String, @transient val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
 
+  def this(path: String) = this(path, null: DxFileAttributes)
+
+  def this(parent: String, child: String) = this(parent + (if (parent == "/") "" else "/") + child)
+
   override def getFileSystem: FileSystem = throw new UnsupportedOperationException
 
   override def isAbsolute: Boolean = pathString.startsWith("/")
@@ -502,14 +506,14 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
 
   override lazy val getFileName: Path = {
     val name = if (pathString == "/") "/" else new File(pathString).getName
-    new DxPath(name, null)
+    new DxPath(name)
   }
 
   lazy val parent: DxPath = {
     if (pathString == "/") null
     else {
       val s = pathString.take(pathString.lastIndexOf("/"))
-      if (s.isEmpty) DxRootPath else new DxPath(s, null)
+      if (s.isEmpty) DxRootPath else new DxPath(s)
     }
   }
 
@@ -538,7 +542,7 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
       this
     } else {
       val newPath = pathString + (if (pathString == "/") "" else "/") + other
-      new DxPath(newPath, null)
+      new DxPath(newPath)
     }
   }
 
@@ -548,7 +552,7 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
 
   override def resolveSibling(other: String): Path = throw new NotImplementedError
 
-  override def relativize(other: Path): Path = new DxPath(other.toString.drop(toString.length + 1), null)
+  override def relativize(other: Path): Path = new DxPath(other.toString.drop(toString.length + 1))
 
   override def toUri: URI = throw new NotImplementedError
 
@@ -604,6 +608,13 @@ private object RootFileAttributes extends DxFileAttributes(isDirectory = true, l
 
 class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   var downloaded: File = _
+
+  def this(parent: String, child: String) = this(new DxPath(parent, child))
+
+
+  def this(parent: DxFile, child: String) = this(parent.path.resolveDx(child))
+
+  def this(parent: DxFile, child: File) = this(parent, child.getName)
 
   private def toStringOrNull(path: Path): String = Option(path).map(_.toString).orNull
 
@@ -713,8 +724,6 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   override lazy val hashCode: Int = path.hashCode()
 
   override lazy val toString: String = toStringOrNull(path)
-
-  def toDxPath: DxPath = path
 
   override def toPath: Path = path
 }

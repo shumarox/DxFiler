@@ -114,7 +114,7 @@ class DxFiler {
               case Some(name) =>
                 WaitCursorWorker(frame, true) { () =>
                   val parent = treePathToFile(tree.getSelectionPath)
-                  Dx.createFolderWithErrorMessage(parent.toDxPath.resolveDx(name).toString)
+                  Dx.createFolderWithErrorMessage(new DxFile(parent, name).toString)
                   refresh()
                 }(null).execute()
               case _ =>
@@ -170,7 +170,7 @@ class DxFiler {
       WaitCursorWorker(frame, true) { () =>
         Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName) match {
           case Some(name: String) =>
-            toFile = file.toDxPath.parent.resolveDx(name).toDxFile
+            toFile = new DxFile(file.getParent, name)
             Dx.renameWithErrorMessage(file.toString, toFile.toString)
             refresh()
           case None =>
@@ -674,7 +674,7 @@ class DxFiler {
 
         WaitCursorWorker(frame, true) { () =>
           files.asScala.foreach { file =>
-            Dx.copy(file.toString, destDir.toDxPath.resolve(file.getName).toString) match {
+            Dx.copy(file.toString, new DxFile(destDir, file).toString) match {
               case Right(_) =>
               case Left(result) =>
                 System.err.println(result)
