@@ -135,7 +135,7 @@ object Dx {
               val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
               sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
               val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
-              val size: Long = if (isDirectory) 0L else Try(entry("size").toLong).getOrElse(0L)
+              val size: Long = if (isDirectory) 0L else Try(entry("size").asInstanceOf[java.lang.Integer].toLong).getOrElse(0L)
               new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
             }.toArray
           lastListFilePath = path
@@ -654,9 +654,9 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def isHidden: Boolean = throw new UnsupportedOperationException
 
-  override def lastModified: Long = Try(Files.getLastModifiedTime(path).toMillis).getOrElse(0L)
+  override def lastModified: Long = Try(path.dxFileAttributes.lastModifiedTime.toMillis).getOrElse(0L)
 
-  override def length: Long = path.dxFileAttributes.size
+  override def length: Long = Try(path.dxFileAttributes.size).getOrElse(0L)
 
   override def createNewFile: Boolean = throw new UnsupportedOperationException
 
