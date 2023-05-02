@@ -214,11 +214,11 @@ object Dx {
     }
   }
 
+  private case class SourceDestDxFilePair(source: File, dest: DxFile)
+
   def upload(dest: DxFile, files: Array[File]): Unit = {
 
-    case class Pair(dest: DxFile, source: File)
-
-    def toDxFile(parentDxFile: DxFile, files: Array[File]): List[Pair] = {
+    def toDxFile(parentDxFile: DxFile, files: Array[File]): List[SourceDestDxFilePair] = {
       files.toList.flatMap { file =>
         val dxFile = new DxFile(parentDxFile, file)
 
@@ -227,18 +227,22 @@ object Dx {
         } else if (file.length == 0) {
           Nil
         } else {
-          List(Pair(dxFile, file))
+          List(SourceDestDxFilePair(file, dxFile))
         }
       }
     }
 
-    val pairs: Array[Pair] = toDxFile(dest, files).toArray
+    val pairs: Array[SourceDestDxFilePair] = toDxFile(dest, files).toArray
 
     if (pairs.isEmpty) {
       Dialog.showMessage(null, "空でないファイルがありません。", APP_NAME, Dialog.Message.Error)
       return
     }
 
+    pairs.grouped(1000).foreach(upload)
+  }
+
+  private def upload(pairs: Array[SourceDestDxFilePair]): Unit = {
     val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
     val bodyForStart = s"""{"num_sessions": ${pairs.length}, "session_type": {".tag": "sequential"}}"""
 
@@ -254,7 +258,7 @@ object Dx {
 
     val chunkSize = 128 * 1024 * 1024
 
-    (pairs zip sessionIds).foreach { case (Pair(_, source), sessionId) =>
+    (pairs zip sessionIds).foreach { case (SourceDestDxFilePair(source, _), sessionId) =>
       var offset = 0L
 
       Using.resource(new BufferedInputStream(new FileInputStream(source))) { is =>
@@ -299,7 +303,7 @@ object Dx {
     }
 
     val entries =
-      (pairs zip sessionIds).map { case (Pair(dest, source), sessionId) =>
+      (pairs zip sessionIds).map { case (SourceDestDxFilePair(source, dest), sessionId) =>
         val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
         val clientModified = sdf.format(source.lastModified).replaceAll(" ", "T") + "Z"
