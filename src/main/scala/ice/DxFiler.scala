@@ -200,7 +200,7 @@ class DxFiler {
       }.map {
         _.length
       }.sum
-      lbStatus.text = currentDirectoryInfo + "  " + s"$count items selected, $totalSize bytes."
+      lbStatus.text = currentDirectoryInfo + "  " + f"$count%,d items selected, $totalSize%,d bytes."
     case ev: MouseClicked if ev.clicks == 2 =>
       getSelectedFiles.foreach { file =>
         executeAndShowError {
@@ -425,7 +425,7 @@ class DxFiler {
   private def setCurrentDirectoryInfo(file: File, children: Array[DxFile]): Unit = {
     val count = children.length
     val totalSize = children.map(_.length).sum
-    currentDirectoryInfo = s"$count items, $totalSize bytes."
+    currentDirectoryInfo = f"$count%,d items, $totalSize%,d bytes."
     lbStatus.text = currentDirectoryInfo
 
     tfAddress.text = file.getPath
