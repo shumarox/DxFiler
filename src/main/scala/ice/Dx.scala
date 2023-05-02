@@ -118,35 +118,62 @@ object Dx {
   def list(path: String): Array[DxFile] = {
     ensureAccessToken()
 
-    if (path == lastListFilePath && System.currentTimeMillis - lastListFileTime < 100) {
-      lastListFileResult
-    } else {
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+
+    def resultToDxFileArray(map: Map[String, Object]): Array[DxFile] = {
+      map("entries").asInstanceOf[List[Map[String, String]]].map { entry =>
+        val path: String = entry("path_display")
+        val isDirectory: Boolean = entry(".tag") == "folder"
+        val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
+        val size: Long = if (isDirectory) 0L else Try(entry("size").asInstanceOf[Integer].toLong).getOrElse(0L)
+        new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
+      }.toArray
+    }
+
+    @tailrec
+    def processResultAndNext(result: String): Unit = {
+      val map = JsonUtil.convert(result)
+      lastListFileResult ++= resultToDxFileArray(map)
+
+      if (map("has_more").toString.toBoolean) {
+        val cursor = map("cursor").toString
+        val body = s"""{"cursor": "$cursor"}"""
+
+        processHttpRequest("https://api.dropboxapi.com/2/files/list_folder/continue", "POST", properties, body).match {
+          case Right(result) =>
+            processResultAndNext(result)
+          case Left(result) =>
+            lastListFileResult = Array()
+            System.err.println(result)
+            Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+        }
+      }
+    }
+
+    def listStart(path: String): Unit = {
       val pathForRequest = if (path == "/") "" else path
       val body = s"""{"path": "$pathForRequest"}"""
 
-      val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
       processHttpRequest("https://api.dropboxapi.com/2/files/list_folder", "POST", properties, body).match {
         case Right(result) =>
-          val map = JsonUtil.convert(result)
-          lastListFileResult =
-            map("entries").asInstanceOf[List[Map[String, String]]].map { entry =>
-              val path: String = entry("path_display")
-              val isDirectory: Boolean = entry(".tag") == "folder"
-              val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-              sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
-              val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
-              val size: Long = if (isDirectory) 0L else Try(entry("size").asInstanceOf[java.lang.Integer].toLong).getOrElse(0L)
-              new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
-            }.toArray
-          lastListFilePath = path
-          lastListFileTime = System.currentTimeMillis()
-          lastListFileResult
+          processResultAndNext(result)
         case Left(result) =>
+          lastListFileResult = Array()
           System.err.println(result)
           Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
-          Array[DxFile]()
       }
     }
+
+    if (path != lastListFilePath || System.currentTimeMillis - lastListFileTime >= 100) {
+      lastListFileResult = Array()
+      listStart(path)
+      lastListFilePath = path
+      lastListFileTime = System.currentTimeMillis()
+    }
+
+    lastListFileResult
   }
 
   def download(file: DxFile): File = {
