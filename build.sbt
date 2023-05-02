@@ -16,7 +16,7 @@ autoScalaLibrary := true
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-swing" % "3.0.0"
 libraryDependencies += "net.lingala.zip4j" % "zip4j" % "2.11.4"
-libraryDependencies += "org.mozilla" % "rhino-engine" % "1.7.14"
+libraryDependencies += "org.json" % "json" % "20230227"
 
 mainClass := Some("ice.Filer")
 

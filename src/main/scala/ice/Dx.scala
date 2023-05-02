@@ -127,7 +127,7 @@ object Dx {
       val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
       processHttpRequest("https://api.dropboxapi.com/2/files/list_folder", "POST", properties, body).match {
         case Right(result) =>
-          val map = JsonUtil.jsonStringToMap(result)
+          val map = JsonUtil.convert(result)
           lastListFileResult =
             map("entries").asInstanceOf[List[Map[String, String]]].map { entry =>
               val path: String = entry("path_display")
@@ -245,7 +245,7 @@ object Dx {
     val sessionIds =
       processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/start_batch", "POST", properties, bodyForStart).match {
         case Right(result) =>
-          val map = JsonUtil.jsonStringToMap(result)
+          val map = JsonUtil.convert(result)
           map("session_ids").asInstanceOf[List[String]].toArray
         case Left(result) =>
           System.err.println(result)
@@ -286,7 +286,7 @@ object Dx {
 
       processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/finish_batch/check", "POST", properties, body).match {
         case Right(result) =>
-          val map = JsonUtil.jsonStringToMap(result)
+          val map = JsonUtil.convert(result)
           if (map(".tag") == "in_progress") {
             waitFinish(asyncJobId)
           } else {
@@ -311,11 +311,11 @@ object Dx {
     processHttpRequest("https://api.dropboxapi.com/2/files/upload_session/finish_batch_v2", "POST", properties, bodyForFinish).match {
       case Right(resultFinish) =>
         var result = resultFinish
-        var map: Map[String, Object] = JsonUtil.jsonStringToMap(result)
+        var map: Map[String, Object] = JsonUtil.convert(result)
 
         if (map.contains("async_job_id")) {
           result = waitFinish(map("async_job_id").toString)
-          map = JsonUtil.jsonStringToMap(result)
+          map = JsonUtil.convert(result)
         } else if (map("entries").asInstanceOf[List[Map[String, Object]]].exists(_(".tag") != "success")) {
           throw new IllegalStateException(result)
         }
