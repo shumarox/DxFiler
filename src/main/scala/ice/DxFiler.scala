@@ -679,7 +679,6 @@ class DxFiler {
               case Left(result) =>
                 System.err.println(result)
                 Dialog.showMessage(null, "コピーに失敗しました。", APP_NAME, Dialog.Message.Error)
-                Array[DxPath]()
             }
           }
           refresh()
