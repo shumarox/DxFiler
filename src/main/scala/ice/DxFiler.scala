@@ -148,10 +148,8 @@ class DxFiler {
       if (getSelectedFiles.nonEmpty) {
         contents +=
           createMenuItem("Delete", Key.D) {
-            getSelectedFiles.foreach { file =>
-              executeAndShowError {
-                deleteFile(file)
-              }
+            executeAndShowError {
+              deleteFile(getSelectedFiles.toArray)
             }
           }
       }
@@ -180,9 +178,11 @@ class DxFiler {
     worker.execute()
   }
 
-  private def deleteFile(file: DxFile): Unit =
+  private def deleteFile(files: Array[DxFile]): Unit =
     WaitCursorWorker(frame, true) { () =>
-      Dx.deleteWithErrorMessage(file.toString)
+      files.foreach { file =>
+        Dx.deleteWithErrorMessage(file.toString)
+      }
       refresh()
     }(null).execute()
 
@@ -252,10 +252,8 @@ class DxFiler {
       if (getSelectedFiles.nonEmpty) {
         Dialog.showConfirmation(frame, "削除しますか？", APP_NAME, Dialog.Options.OkCancel) match {
           case Dialog.Result.Ok =>
-            getSelectedFiles.foreach { file =>
-              executeAndShowError {
-                deleteFile(file)
-              }
+            executeAndShowError {
+              deleteFile(getSelectedFiles.toArray)
             }
           case _ =>
         }
