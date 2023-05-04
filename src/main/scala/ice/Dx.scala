@@ -386,17 +386,17 @@ object Dx {
     }
   }
 
-  def rename(from: String, to: String): Either[String, String] = {
-    copy(from, to) match {
-      case Right(_) =>
-        delete(from)
-      case Left(result) =>
-        Left(result)
-    }
+  def move(from: String, to: String): Either[String, String] = {
+    ensureAccessToken()
+
+    val body = s"""{"from_path": "$from", "to_path": "$to"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/files/move_v2", "POST", properties, body)
   }
 
   def renameWithErrorMessage(from: String, to: String): Unit = {
-    rename(from, to).match {
+    move(from, to).match {
       case Right(_) =>
       case Left(result) =>
         System.err.println(result)
