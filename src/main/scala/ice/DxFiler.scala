@@ -719,6 +719,15 @@ class DxFiler {
           false
       }
     }
+
+    override def exportAsDrag(comp: JComponent, e: InputEvent, action: Int): Unit = {
+      comp match {
+        case _: JTable | _: JScrollPane =>
+          super.exportAsDrag(comp, e, action)
+        case _: JTree =>
+          if (treePathToFile(tree.getSelectionPath).toString != "/") super.exportAsDrag(comp, e, action)
+      }
+    }
   }
 
   private val handler = new DxFileTransferHandler
