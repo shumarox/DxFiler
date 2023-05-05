@@ -591,6 +591,8 @@ class DxFiler {
     override def canImport(info: TransferHandler.TransferSupport): Boolean = {
       val flavor = List(DxFileListFlavor, DataFlavor.javaFileListFlavor).find(info.isDataFlavorSupported).orNull
 
+      info.setDropAction(TransferHandler.COPY)
+
       if (!info.isDrop || flavor == null) {
         false
       } else {
