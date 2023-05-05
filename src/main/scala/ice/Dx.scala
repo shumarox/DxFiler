@@ -523,7 +523,7 @@ object Dx {
   }
 }
 
-private class DxPath(private val pathString: String, @transient val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
+private class DxPath(private val pathString: String, val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
 
   def this(path: String) = this(path, null: DxFileAttributes)
 
@@ -621,13 +621,15 @@ private class DxPath(private val pathString: String, @transient val dxFileAttrib
 
 object DxRootPath extends DxPath("/", RootFileAttributes)
 
-private class DxFileAttributes(override val isDirectory: Boolean, override val lastModifiedTime: FileTime, override val size: Long) extends BasicFileAttributes {
-  override def creationTime: FileTime = null
+private class DxFileAttributes(override val isDirectory: Boolean, @transient override val lastModifiedTime: FileTime, override val size: Long) extends BasicFileAttributes with Serializable {
+  @transient
+  override val creationTime: FileTime = null
 
   override def isOther: Boolean = false
 
   override def isRegularFile: Boolean = !isDirectory
 
+  @transient
   override def lastAccessTime: FileTime = null
 
   override def isSymbolicLink: Boolean = false

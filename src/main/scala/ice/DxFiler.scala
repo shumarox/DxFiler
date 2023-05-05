@@ -596,11 +596,37 @@ class DxFiler {
       if (!info.isDrop || flavor == null) {
         false
       } else {
+        val isSourceDxFiles = info.isDataFlavorSupported(DxFileListFlavor)
+
+        def canImportDxFile(destFile: DxFile): Boolean = {
+          val destPath = destFile.toString
+
+          val sourceFiles = info.getTransferable.getTransferData(flavor).asInstanceOf[util.List[DxFile]].asScala
+          val sourcePaths = sourceFiles.map(_.toString)
+          val sourceDirPaths = sourceFiles.filter(_.isDirectory).map(_.toString).map(s => if s == "/" then "/" else s + "/")
+          val sourceParentPaths = sourceFiles.map(_.parentFile).filter(_ != null).map(_.toString)
+
+          destFile.isDirectory && !sourcePaths.contains(destPath) && !sourceDirPaths.exists(destPath.startsWith) && !sourceParentPaths.contains(destPath)
+        }
+
         info.getComponent match {
           case _: JTable | _: JScrollPane =>
-            true
+            if (isSourceDxFiles) {
+              val index =
+                info.getDropLocation match {
+                  case loc: JTable.DropLocation => table.viewToModelRow(loc.getRow)
+                  case _ => -1
+                }
+              val destFile = if (index >= 0) fileTableModel.files(index) else treePathToFile(tree.getSelectionPath)
+              canImportDxFile(destFile)
+            } else true
           case _: JTree =>
-            info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath != null
+            val treePath = info.getDropLocation.asInstanceOf[JTree.DropLocation].getPath
+            if (treePath == null) {
+              false
+            } else if (isSourceDxFiles) {
+              canImportDxFile(treePathToFile(treePath))
+            } else true
         }
       }
     }
