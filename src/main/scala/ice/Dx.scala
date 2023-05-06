@@ -16,7 +16,7 @@ import javax.net.ssl.HttpsURLConnection
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
-import scala.swing.Dialog
+import scala.swing.{Dialog, Window}
 import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try, Using}
 
@@ -38,15 +38,22 @@ object Dx {
   private var expiresIn: Long = 0L
   private var lastTimeAccessToken: Long = 0L
 
+  var parentWindow: Window = _
+
+  private def showError(message: String, detail: Object = null): Unit = {
+    val messageForDisplay = if (detail == null || detail.toString.isEmpty) message else message + "\n" + detail
+    Dialog.showMessage(parentWindow, messageForDisplay, APP_NAME, Dialog.Message.Error)
+  }
+
   def ensureRefreshToken(): Unit = {
     if (refreshToken == null) {
       Desktop.getDesktop.browse(new URL(s"https://www.dropbox.com/oauth2/authorize?response_type=code&token_access_type=offline&client_id=$APP_KEY").toURI)
       val auth_code =
-        Dialog.showInput(message = "ブラウザに表示されたアクセスコードを貼り付けてください。", initial = "").match {
+        Dialog.showInput(parentWindow, message = "ブラウザに表示されたアクセスコードを貼り付けてください。", APP_NAME, initial = "").match {
           case Some(auth_code) =>
             auth_code
           case None =>
-            Dialog.showMessage(null, "アクセスコードが入力されなかったため、アプリを終了します。", APP_NAME, Dialog.Message.Error)
+            showError("アクセスコードが入力されなかったため、アプリを終了します。")
             System.exit(-1)
             null
         }
@@ -59,7 +66,7 @@ object Dx {
               m.group(1)
             case None =>
               System.err.println(result)
-              Dialog.showMessage(null, "認証に失敗したため、アプリを終了します。", APP_NAME, Dialog.Message.Error)
+              showError("認証に失敗したため、アプリを終了します。", result)
               System.exit(-1)
               null
           }
@@ -69,7 +76,7 @@ object Dx {
           }
         case Left(result) =>
           System.err.println(result)
-          Dialog.showMessage(null, "認証に失敗したため、アプリを終了します。", APP_NAME, Dialog.Message.Error)
+          showError("認証に失敗したため、アプリを終了します。", result)
           System.exit(-1)
       }
     }
@@ -147,7 +154,7 @@ object Dx {
           case Left(result) =>
             lastListFileResult = Array()
             System.err.println(result)
-            Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+            showError("ファイル一覧の取得に失敗しました。", result)
         }
       }
     }
@@ -162,7 +169,7 @@ object Dx {
         case Left(result) =>
           lastListFileResult = Array()
           System.err.println(result)
-          Dialog.showMessage(null, "ファイル一覧の取得に失敗しました。", APP_NAME, Dialog.Message.Error)
+          showError("ファイル一覧の取得に失敗しました。", result)
       }
     }
 
@@ -196,7 +203,7 @@ object Dx {
         result
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "ダウンロードに失敗しました。", APP_NAME, Dialog.Message.Error)
+        showError("ダウンロードに失敗しました。", result)
         null
     }
   }
@@ -236,7 +243,7 @@ object Dx {
         folder
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "ダウンロードに失敗しました。", APP_NAME, Dialog.Message.Error)
+        showError("ダウンロードに失敗しました。", result)
         null
     }
   }
@@ -262,7 +269,7 @@ object Dx {
     val pairs: Array[SourceDestDxFilePair] = toDxFile(dest, files).toArray
 
     if (pairs.isEmpty) {
-      Dialog.showMessage(null, "空でないファイルがありません。", APP_NAME, Dialog.Message.Error)
+      showError("空でないファイルがありません。")
       return
     }
 
@@ -381,7 +388,7 @@ object Dx {
       case Right(_) =>
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "削除に失敗しました。", APP_NAME, Dialog.Message.Error)
+        showError("削除に失敗しました。", result)
         Array[DxPath]()
     }
   }
@@ -400,7 +407,7 @@ object Dx {
       case Right(_) =>
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "名前の変更に失敗しました。", APP_NAME, Dialog.Message.Error)
+        showError("名前の変更に失敗しました。", result)
         Array[DxPath]()
     }
   }
@@ -419,7 +426,7 @@ object Dx {
       case Right(_) =>
       case Left(result) =>
         System.err.println(result)
-        Dialog.showMessage(null, "フォルダの作成に失敗しました。", APP_NAME, Dialog.Message.Error)
+        showError("フォルダの作成に失敗しました。", result)
         Array[DxPath]()
     }
   }

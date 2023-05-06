@@ -36,6 +36,11 @@ object DxFiler {
 
   private var frame: Frame = _
 
+  private def showError(message: String, detail: Object = null): Unit = {
+    val messageForDisplay = if (detail == null || detail.toString.isEmpty) message else message + "\n" + detail
+    Dialog.showMessage(frame, messageForDisplay, APP_NAME, Dialog.Message.Error)
+  }
+
   def main(args: Array[String]): Unit = {
     Try {
       UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName)
@@ -46,6 +51,8 @@ object DxFiler {
 
       override def closeOperation(): Unit = System.exit(0)
     }
+
+    Dx.parentWindow = frame
 
     val filer = new DxFiler
     frame.contents = filer.mainPanel
@@ -110,14 +117,12 @@ class DxFiler {
       if (getSelectedFiles.isEmpty) {
         contents +=
           createMenuItem("CreateFolder", Key.F) {
-            Dialog.showInput(frame, "フォルダ名", APP_NAME, initial = "") match {
-              case Some(name) =>
-                WaitCursorWorker(frame, true) { () =>
-                  val parent = treePathToFile(tree.getSelectionPath)
-                  Dx.createFolderWithErrorMessage(new DxFile(parent, name).toString)
-                  refresh()
-                }(null).execute()
-              case _ =>
+            Dialog.showInput(frame, "フォルダ名", APP_NAME, initial = "").foreach { name =>
+              WaitCursorWorker(frame, true) { () =>
+                val parent = treePathToFile(tree.getSelectionPath)
+                Dx.createFolderWithErrorMessage(new DxFile(parent, name).toString)
+                refresh()
+              }(null).execute()
             }
           }
       }
@@ -126,8 +131,8 @@ class DxFiler {
         if (desktop.isSupported(Desktop.Action.OPEN)) {
           contents +=
             createMenuItem("Open", Key.O) {
-              getSelectedFiles.foreach { file =>
-                executeAndShowError {
+              executeAndShowError {
+                getSelectedFiles.foreach { file =>
                   openFile(file)
                 }
               }
@@ -138,8 +143,8 @@ class DxFiler {
       if (getSelectedFiles.length == 1) {
         contents +=
           createMenuItem("Rename", Key.R) {
-            val file = getSelectedFiles.head
             executeAndShowError {
+              val file = getSelectedFiles.head
               renameFile(file)
             }
           }
@@ -166,12 +171,10 @@ class DxFiler {
 
     val worker =
       WaitCursorWorker(frame, true) { () =>
-        Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName) match {
-          case Some(name: String) =>
-            toFile = new DxFile(file.getParent, name)
-            Dx.renameWithErrorMessage(file.toString, toFile.toString)
-            refresh()
-          case None =>
+        Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName).foreach { name =>
+          toFile = new DxFile(file.getParent, name)
+          Dx.renameWithErrorMessage(file.toString, toFile.toString)
+          refresh()
         }
       }(null)
 
@@ -336,7 +339,7 @@ class DxFiler {
       f
     } catch {
       case t: Throwable =>
-        Dialog.showMessage(mainPanel, t.toString, t.getMessage, Dialog.Message.Error)
+        showError("エラーが発生しました。", t)
     }
 
     mainPanel.repaint()
@@ -651,7 +654,7 @@ class DxFiler {
           case Success(f: util.List[File]) =>
             f
           case Failure(ex) =>
-            Dialog.showMessage(frame, "ファイルの取得に失敗しました。\n" + ex.toString)
+            showError("ファイルの取得に失敗しました。", ex)
             return false
         }
 
@@ -674,7 +677,7 @@ class DxFiler {
           true
         case Failure(ex) =>
           ex.printStackTrace()
-          Dialog.showMessage(frame, "アップロードに失敗しました。\n" + ex.toString)
+          showError("アップロードに失敗しました。", ex)
           false
       }
     }
@@ -685,7 +688,7 @@ class DxFiler {
           case Success(f: util.List[DxFile]) =>
             f
           case Failure(ex) =>
-            Dialog.showMessage(frame, "ファイルの取得に失敗しました。\n" + ex.toString)
+            showError("ファイルの取得に失敗しました。", ex)
             return false
         }
 
@@ -704,7 +707,7 @@ class DxFiler {
               case Right(_) =>
               case Left(result) =>
                 System.err.println(result)
-                Dialog.showMessage(null, "コピーに失敗しました。", APP_NAME, Dialog.Message.Error)
+                showError("コピーに失敗しました。", result)
             }
           }
           refresh()
@@ -715,7 +718,7 @@ class DxFiler {
           true
         case Failure(ex) =>
           ex.printStackTrace()
-          Dialog.showMessage(frame, "移動に失敗しました。\n" + ex.toString)
+          showError("コピーに失敗しました。", ex)
           false
       }
     }
