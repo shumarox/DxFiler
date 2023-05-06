@@ -42,9 +42,8 @@ object DxFiler {
   }
 
   def main(args: Array[String]): Unit = {
-    Try {
-      UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName)
-    }
+    Try(UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName))
+    Try(UIManager.put("Button.showMnemonics", true))
 
     frame = new Frame {
       title = APP_NAME
