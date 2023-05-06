@@ -720,7 +720,7 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def listFiles: Array[File] = Dx.list(path.toString).asInstanceOf[Array[File]]
 
-  override def listFiles(filter: FilenameFilter): Array[File] = listFiles.filter(f => filter.accept(this, toStringOrNull(path)))
+  override def listFiles(filter: FilenameFilter): Array[File] = listFiles.filter(f => filter.accept(this, f.getName))
 
   override def listFiles(filter: FileFilter): Array[File] = listFiles.filter(filter.accept)
 
