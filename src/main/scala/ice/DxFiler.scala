@@ -141,10 +141,20 @@ class DxFiler {
 
       if (getSelectedFiles.length == 1) {
         contents +=
-          createMenuItem("Rename", Key.R) {
+          createMenuItem("Rename", Key.N) {
             executeAndShowError {
               val file = getSelectedFiles.head
               renameFile(file)
+            }
+          }
+      }
+
+      if (getSelectedFiles.length == 1) {
+        contents +=
+          createMenuItem("Replicate", Key.P) {
+            executeAndShowError {
+              val file = getSelectedFiles.head
+              replicateFile(file)
             }
           }
       }
@@ -173,6 +183,23 @@ class DxFiler {
         Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName).foreach { name =>
           toFile = new DxFile(file.getParent, name)
           Dx.renameWithErrorMessage(file.toString, toFile.toString)
+          refresh()
+        }
+      }(null)
+
+    worker.execute()
+  }
+
+  private def replicateFile(file: DxFile): Unit = {
+    if (file.toString == "/") throw new IllegalArgumentException("can't replicate root path")
+
+    var toFile: DxFile = null
+
+    val worker =
+      WaitCursorWorker(frame, true) { () =>
+        Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName).foreach { name =>
+          toFile = new DxFile(file.getParent, name)
+          Dx.copyWithErrorMessage(file.toString, toFile.toString)
           refresh()
         }
       }(null)

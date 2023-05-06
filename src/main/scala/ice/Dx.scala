@@ -372,6 +372,16 @@ object Dx {
     processHttpRequest("https://api.dropboxapi.com/2/files/copy_v2", "POST", properties, body)
   }
 
+  def copyWithErrorMessage(from: String, to: String): Unit = {
+    copy(from, to).match {
+      case Right(_) =>
+      case Left(result) =>
+        System.err.println(result)
+        showError("コピーに失敗しました。", result)
+        Array[DxPath]()
+    }
+  }
+
   def delete(path: String): Either[String, String] = {
     ensureAccessToken()
 
