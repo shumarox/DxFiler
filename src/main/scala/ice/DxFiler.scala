@@ -426,6 +426,8 @@ class DxFiler {
   private def refresh(node: DefaultMutableTreeNode = treePathToNode(tree.getSelectionPaths.head)): Unit = {
     val file = node.getUserObject.asInstanceOf[DxFile]
 
+    node.removeAllChildren()
+
     val worker = new SwingWorker[Unit, File] {
       override def doInBackground(): Unit = {
         val children = getChildren(file)
@@ -435,14 +437,14 @@ class DxFiler {
       }
 
       override protected def process(children: util.List[File]): Unit = {
-        node.removeAllChildren()
         children.asScala.foreach { child =>
           node.add(new DefaultMutableTreeNode(child))
         }
-        tree.getModel.asInstanceOf[DefaultTreeModel].reload(node)
       }
 
-      override protected def done(): Unit = {}
+      override protected def done(): Unit = {
+        tree.getModel.asInstanceOf[DefaultTreeModel].reload(node)
+      }
     }
 
     worker.execute()
