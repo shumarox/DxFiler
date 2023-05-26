@@ -1,7 +1,7 @@
 name := "DxFiler"
 version := "0.0.2"
 
-scalaVersion := "3.2.2"
+scalaVersion := "3.3.0"
 
 crossPaths := false
 
@@ -15,7 +15,7 @@ scalacOptions ++= Seq(
 autoScalaLibrary := true
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-swing" % "3.0.0"
-libraryDependencies += "net.lingala.zip4j" % "zip4j" % "2.11.4"
+libraryDependencies += "net.lingala.zip4j" % "zip4j" % "2.11.5"
 libraryDependencies += "org.json" % "json" % "20230227"
 
 mainClass := Some("ice.Filer")
