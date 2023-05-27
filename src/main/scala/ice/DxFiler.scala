@@ -129,7 +129,7 @@ class DxFiler {
       if (getSelectedFiles.nonEmpty) {
         if (desktop.isSupported(Desktop.Action.OPEN)) {
           contents +=
-            createMenuItem("Open", Key.O) {
+            createMenuItem("Open(Temporary)", Key.O) {
               executeAndShowError {
                 getSelectedFiles.foreach { file =>
                   openFile(file)
