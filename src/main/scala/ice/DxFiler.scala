@@ -268,8 +268,8 @@ class DxFiler {
     case ev: KeyPressed if ev.key == Key.ContextMenu =>
       val r = table.peer.getCellRect(table.selection.rows.anchorIndex, table.selection.columns.anchorIndex, true)
 
-      val rx = (r.x + r.width) min table.peer.getParent.getWidth
-      val ry = (r.y + r.height) min table.peer.getParent.getHeight
+      val rx = r.x + r.width
+      val ry = r.y + r.height
 
       showTablePopupMenu(table, rx, ry)
 
@@ -338,8 +338,8 @@ class DxFiler {
       } else if (ev.getKeyCode == KeyEvent.VK_CONTEXT_MENU) {
         ev.consume()
         val r = tree.getPathBounds(tree.getSelectionPath)
-        val rx = (r.x + r.width) min tree.getParent.getWidth
-        val ry = (r.y + r.height) min tree.getParent.getHeight
+        val rx = r.x + r.width
+        val ry = r.y + r.height
 
         showTreePopupMenu(tree, rx, ry)
       }
