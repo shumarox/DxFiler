@@ -173,7 +173,7 @@ class DxFiler {
   private def openFile(file: DxFile): Unit =
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
 
-  private def renameFile(file: DxFile): Unit = {
+  private def renameFile(file: DxFile, refreshParent: Boolean = false): Unit = {
     if (file.toString == "/") throw new IllegalArgumentException("can't rename root path")
 
     var toFile: DxFile = null
@@ -183,7 +183,12 @@ class DxFiler {
         Dialog.showInput(frame, "ファイル名", APP_NAME, initial = file.getName).foreach { name =>
           toFile = new DxFile(file.getParent, name)
           Dx.renameWithErrorMessage(file.toString, toFile.toString)
-          refresh()
+
+          if (refreshParent) {
+            tree.setSelectionPath(tree.getSelectionPath.getParentPath)
+          } else {
+            refresh()
+          }
         }
       }(null)
 
@@ -317,8 +322,60 @@ class DxFiler {
       if (ev.getKeyCode == KeyEvent.VK_F5) {
         refresh()
         ev.consume()
+      } else if (ev.getKeyCode == KeyEvent.VK_F2) {
+        ev.consume()
+        renameFile(treePathToFile(tree.getSelectionPath), refreshParent = true)
+      } else if (ev.getKeyCode == KeyEvent.VK_DELETE) {
+        Dialog.showConfirmation(frame, "削除しますか？", APP_NAME, Dialog.Options.OkCancel) match {
+          case Dialog.Result.Ok =>
+            val file = treePathToFile(tree.getSelectionPath)
+            WaitCursorWorker(frame, true) { () =>
+              Dx.delete(file.toPath.toString)
+              tree.setSelectionPath(tree.getSelectionPath.getParentPath)
+            }(null).execute()
+          case _ =>
+        }
+      } else if (ev.getKeyCode == KeyEvent.VK_CONTEXT_MENU) {
+        ev.consume()
+        val r = tree.getPathBounds(tree.getSelectionPath)
+        val rx = (r.x + r.width) min tree.getParent.getWidth
+        val ry = (r.y + r.height) min tree.getParent.getHeight
+
+        showTreePopupMenu(tree, rx, ry)
       }
     }
+  }
+
+  private def showTreePopupMenu(component: JComponent, x: Int, y: Int): Unit = {
+    new PopupMenu {
+      private def createMenuItem(label: String, mnemonic: Key.Value)(f: => Unit): MenuItem = {
+        val action = Action(label) {
+          executeAndShowError {
+            f
+          }
+        }
+
+        val menuItem = new MenuItem(action)
+        menuItem.mnemonic = mnemonic
+        menuItem
+      }
+
+      contents +=
+        createMenuItem("Rename", Key.N) {
+          executeAndShowError {
+            renameFile(treePathToFile(tree.getSelectionPath), refreshParent = true)
+          }
+        }
+
+      contents +=
+        createMenuItem("Delete", Key.D) {
+          val file = treePathToFile(tree.getSelectionPath)
+          WaitCursorWorker(frame, true) { () =>
+            Dx.delete(file.toPath.toString)
+            tree.setSelectionPath(tree.getSelectionPath.getParentPath)
+          }(null).execute()
+        }
+    }.show(Component.wrap(component), x, y)
   }
 
   private def getChildren(file: DxFile): Array[DxFile] =
@@ -358,6 +415,19 @@ class DxFiler {
     setCellRenderer(new FileTreeCellRenderer(getCellRenderer))
     expandRow(0)
     setVisibleRowCount(15)
+
+    addMouseListener(new MouseAdapter {
+      override def mouseClicked(ev: MouseEvent): Unit = {
+        if (ev.getClickCount == 1 && ev.getModifiersEx == InputEvent.META_DOWN_MASK) {
+          ev.consume()
+          val treePath = getPathForLocation(ev.getX, ev.getY)
+          if (treePath != null) {
+            if (getSelectionPaths == null || !getSelectionPaths.contains(treePath)) tree.setSelectionPath(treePath)
+            showTreePopupMenu(tree, ev.getX, ev.getY)
+          }
+        }
+      }
+    })
   }
 
   private def executeAndShowError(f: => Unit): Unit = {
