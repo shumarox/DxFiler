@@ -134,7 +134,7 @@ object Dx {
         val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
         val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
-        val size: Long = if (isDirectory) 0L else Try(entry("size").asInstanceOf[Integer].toLong).getOrElse(0L)
+        val size: Long = if (isDirectory) 0L else Try(entry("size").asInstanceOf[Long]).getOrElse(0L)
         new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
       }.toArray
     }
