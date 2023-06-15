@@ -290,10 +290,10 @@ object Dx {
           throw new IllegalStateException(result)
       }
 
-    val chunkSize = 128 * 1024 * 1024
+    val chunkSize: Long = 128L * 1024 * 1024
 
     (pairs zip sessionIds).foreach { case (SourceDestDxFilePair(source, _), sessionId) =>
-      var offset = 0L
+      var offset: Long = 0L
 
       Using.resource(new BufferedInputStream(new FileInputStream(source))) { is =>
         while (offset < source.length) {
@@ -302,10 +302,11 @@ object Dx {
             "Dropbox-API-Arg" -> s"""{"cursor": {"session_id": "$sessionId", "offset": $offset}, "close": $close}"""
           )
 
-          val limit = chunkSize min (source.length - offset).toInt
+          val limit: Long = chunkSize min (source.length - offset)
 
           processHttpUpload("https://content.dropboxapi.com/2/files/upload_session/append_v2", "POST", properties, is, limit).match {
             case Right(_) =>
+              System.out.print(".")
             case Left(result) =>
               System.err.println(result)
               throw new IllegalStateException(result)
@@ -488,7 +489,7 @@ object Dx {
     }
   }
 
-  private def processHttpUpload(url: String, method: String, properties: Map[String, String], is: InputStream, limit: Int): Either[String, String] = {
+  private def processHttpUpload(url: String, method: String, properties: Map[String, String], is: InputStream, limit: Long): Either[String, String] = {
     val conn = processHttpConnect(url, method, properties, is != null)
 
     val bufferSize = 16 * 1024 * 1024
@@ -497,7 +498,7 @@ object Dx {
     Using.resource(new BufferedOutputStream(conn.getOutputStream)) { os =>
       var offset = 0
       while (offset < limit) {
-        val len = is.read(buffer, 0, bufferSize min limit - offset)
+        val len = is.read(buffer, 0, bufferSize min (limit - offset).toInt)
         os.write(buffer, 0, len)
         offset += bufferSize
       }
