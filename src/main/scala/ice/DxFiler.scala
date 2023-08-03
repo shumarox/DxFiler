@@ -3,10 +3,8 @@ package ice
 import java.awt.datatransfer.{DataFlavor, Transferable, UnsupportedFlavorException}
 import java.awt.dnd.DnDConstants
 import java.awt.event.*
-import java.awt.{Color, Desktop, Component as AComponent}
+import java.awt.{Desktop, Component as AComponent}
 import java.io.*
-import java.net.{URI, URL}
-import java.nio.file.{Files, Path}
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Date
@@ -16,8 +14,9 @@ import javax.swing.event.*
 import javax.swing.filechooser.FileSystemView
 import javax.swing.table.*
 import javax.swing.tree.*
-import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.jdk.CollectionConverters.*
 import scala.swing.BorderPanel.Position.*
 import scala.swing.Orientation.*
@@ -137,6 +136,15 @@ class DxFiler {
               }
             }
         }
+
+        contents +=
+          createMenuItem("Download(Temporary)", Key.D) {
+            executeAndShowError {
+              getSelectedFiles.foreach { file =>
+                downloadFileToTemporary(file)
+              }
+            }
+          }
       }
 
       if (getSelectedFiles.length == 1) {
@@ -172,6 +180,9 @@ class DxFiler {
 
   private def openFile(file: DxFile): Unit =
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
+
+  private def downloadFileToTemporary(file: DxFile): Unit =
+    WaitCursorWorker(frame, true)(() => Option(file.downloaded).getOrElse(Dx.download(file)))(null).execute()
 
   private def renameFile(file: DxFile, refreshParent: Boolean = false): Unit = {
     if (file.toString == "/") throw new IllegalArgumentException("can't rename root path")
@@ -655,6 +666,7 @@ class DxFiler {
 
   private class DxFileTransferHandler extends TransferHandler {
 
+    private var inQuestionDialog: Boolean = false
     private object DxFileListFlavor extends DataFlavor(classOf[List[DxFile]], "DxFilerFileFlavor")
 
     override protected def createTransferable(c: JComponent): Transferable = {
@@ -677,9 +689,26 @@ class DxFiler {
           if (flavor == DxFileListFlavor) {
             util.Arrays.asList(fileList: _*)
           } else if (flavor == DataFlavor.javaFileListFlavor) {
-            util.Arrays.asList(fileList.map {
-              case file: DxFile => Option(file.downloaded).getOrElse(Dx.download(file))
-            }: _*)
+            if (fileList.exists(_.downloaded == null)) {
+              if (!inQuestionDialog) {
+                inQuestionDialog = true
+                Future {
+                  Dialog.showConfirmation(frame, "コピー準備のために一時領域にダウンロードしますか？", APP_NAME, Dialog.Options.OkCancel) match {
+                    case Dialog.Result.Ok =>
+                      fileList.foreach { f => downloadFileToTemporary(f) }
+                    case _ =>
+                      exportDone(c, null, DnDConstants.ACTION_NONE)
+                  }
+                  inQuestionDialog = false
+                }
+              }
+
+              null
+            } else {
+              util.Arrays.asList(fileList.map {
+                case file: DxFile => Option(file.downloaded).getOrElse(Dx.download(file))
+              }: _*)
+            }
           } else {
             throw new UnsupportedFlavorException(flavor)
           }
