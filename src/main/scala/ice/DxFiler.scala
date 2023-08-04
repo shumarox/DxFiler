@@ -64,6 +64,18 @@ object DxFiler {
     }
   }
 
+  class LongValueTableCellRenderer extends DefaultTableCellRenderer {
+    override def getTableCellRendererComponent(table: JTable, value: Object, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int): AComponent = {
+      super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
+      value match {
+        case null =>
+        case l: Long => setText(f"$l%,3d")
+        case _ =>
+      }
+      setHorizontalAlignment(SwingConstants.RIGHT)
+      this
+    }
+  }
 }
 
 class DxFiler {
@@ -94,6 +106,8 @@ class DxFiler {
     FileTableModel.setColumnWidth(peer.getColumnModel)
 
     font = new Font("Monospaced", font.getStyle, font.getSize)
+
+    peer.setDefaultRenderer(classOf[java.lang.Long], new LongValueTableCellRenderer)
   }
 
   private val table: FileTable = new FileTable
