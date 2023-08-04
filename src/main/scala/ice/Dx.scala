@@ -5,20 +5,18 @@ import net.lingala.zip4j.ZipFile
 import java.awt.Desktop
 import java.io.*
 import java.net.{HttpURLConnection, URI, URL}
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.nio.file.attribute.*
 import java.text.SimpleDateFormat
 import java.util
-import java.util.concurrent.TimeUnit
-import java.util.{Date, Properties, TimeZone}
+import java.util.{Properties, TimeZone}
 import javax.net.ssl.HttpsURLConnection
 import scala.annotation.tailrec
-import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.swing.{Dialog, Window}
 import scala.util.matching.Regex
-import scala.util.{Failure, Success, Try, Using}
+import scala.util.{Try, Using}
 
 object Dx {
   private val PROPERTY_FILE_NAME = "DxFiler.properties"
