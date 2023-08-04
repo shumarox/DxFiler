@@ -1,9 +1,9 @@
 package ice
 
-import java.awt.datatransfer.{DataFlavor, Transferable, UnsupportedFlavorException}
+import java.awt.datatransfer.{Clipboard, ClipboardOwner, DataFlavor, StringSelection, Transferable, UnsupportedFlavorException}
 import java.awt.dnd.DnDConstants
 import java.awt.event.*
-import java.awt.{Desktop, Component as AComponent}
+import java.awt.{Desktop, Toolkit, Component as AComponent}
 import java.io.*
 import java.text.SimpleDateFormat
 import java.util
@@ -112,7 +112,9 @@ class DxFiler {
         menuItem
       }
 
-      if (getSelectedFiles.isEmpty) {
+      val selectedFiles: Seq[DxFile] = getSelectedFiles
+
+      if (selectedFiles.isEmpty) {
         contents +=
           createMenuItem("CreateFolder", Key.F) {
             Dialog.showInput(frame, "フォルダ名", APP_NAME, initial = "").foreach { name =>
@@ -125,55 +127,86 @@ class DxFiler {
           }
       }
 
-      if (getSelectedFiles.nonEmpty) {
+      if (selectedFiles.nonEmpty) {
         if (desktop.isSupported(Desktop.Action.OPEN)) {
           contents +=
-            createMenuItem("Open(Temporary)", Key.O) {
+            createMenuItem("Open(via Temporary)", Key.O) {
               executeAndShowError {
-                getSelectedFiles.foreach { file =>
-                  openFile(file)
-                }
+                selectedFiles.foreach(openFile)
               }
             }
         }
+      }
 
+      if (selectedFiles.nonEmpty) {
         contents +=
-          createMenuItem("Download(Temporary)", Key.D) {
+          createMenuItem("Prepare file copy", Key.F) {
             executeAndShowError {
-              getSelectedFiles.foreach { file =>
-                downloadFileToTemporary(file)
-              }
+              selectedFiles.foreach(downloadFileToTemporary)
             }
           }
       }
 
-      if (getSelectedFiles.length == 1) {
+      if (selectedFiles.length == 1) {
         contents +=
           createMenuItem("Rename", Key.N) {
             executeAndShowError {
-              val file = getSelectedFiles.head
-              renameFile(file)
+              renameFile(selectedFiles.head)
             }
           }
       }
 
-      if (getSelectedFiles.length == 1) {
+      if (selectedFiles.length == 1) {
         contents +=
           createMenuItem("Replicate", Key.P) {
             executeAndShowError {
-              val file = getSelectedFiles.head
-              replicateFile(file)
+              replicateFile(selectedFiles.head)
             }
           }
       }
 
-      if (getSelectedFiles.nonEmpty) {
+      if (selectedFiles.nonEmpty) {
         contents +=
           createMenuItem("Delete", Key.D) {
             executeAndShowError {
-              deleteFile(getSelectedFiles.toArray)
+              deleteFile(selectedFiles.toArray)
             }
           }
+      }
+
+      if (selectedFiles.nonEmpty) {
+        def setToClipboard(text: String): Unit =
+          Toolkit.getDefaultToolkit.getSystemClipboard.setContents(new StringSelection(text), (clipboard: Clipboard, contents: Transferable) => {})
+
+        def setPropertyToClipboard(f: DxFile => String): Unit = {
+          executeAndShowError {
+            val text = selectedFiles.map { case dxFile: DxFile => f(dxFile) }.mkString("\n")
+            setToClipboard(text)
+          }
+        }
+
+        contents += new Menu("Copy property") {
+          mnemonic =  Key.C
+          contents += createMenuItem("Copy file name", Key.N)(setPropertyToClipboard(_.getName))
+          contents += createMenuItem("Copy dropbox path", Key.P)(setPropertyToClipboard(_.getPath))
+          contents += createMenuItem("Copy dropbox ID", Key.I)(setPropertyToClipboard(_.id))
+          contents += createMenuItem("Copy properties", Key.R) {
+            executeAndShowError {
+              val text =
+                table.selection.rows.toList.map(table.viewToModelRow).map { row =>
+                  val sep = "\t"
+                  "" +
+                    fileTableModel.getValueAt(row, 1) + sep +
+                    fileTableModel.getValueAt(row, 2) + sep +
+                    fileTableModel.getValueAt(row, 3) + sep +
+                    fileTableModel.getValueAt(row, 4) + sep +
+                    fileTableModel.getValueAt(row, 5)
+                }.mkString("\n")
+
+              setToClipboard(text)
+            }
+          }
+        }
       }
     }.show(invoker, x, y)
   }
@@ -306,7 +339,7 @@ class DxFiler {
   }
 
   private def getSelectedFiles: List[DxFile] =
-    table.selection.rows.map(table.viewToModelRow).map(table.model.asInstanceOf[FileTableModel].files).toList
+    table.selection.rows.toList.map(table.viewToModelRow).map(table.model.asInstanceOf[FileTableModel].files)
 
   private def openOrExpandNode(file: DxFile): Unit = {
     if (file.isFile) {
@@ -462,7 +495,7 @@ class DxFiler {
   }
 
   private val tableScroll: ScrollPane = new ScrollPane(table) {
-    preferredSize = new Dimension(800, preferredSize.getHeight.toInt)
+    preferredSize = new Dimension(1000, preferredSize.getHeight.toInt)
 
     listenTo(mouse.clicks, horizontalScrollBar.mouse.clicks, verticalScrollBar.mouse.clicks)
     reactions += {
@@ -559,6 +592,7 @@ class DxFiler {
         ColumnInfo("Ext", classOf[String], -1, -1, 8),
         ColumnInfo("Size", classOf[java.lang.Long], -1, -1, 13),
         ColumnInfo("Last Modified", classOf[String], 19, 19, 19),
+        ColumnInfo("ID", classOf[String], -1, -1, 26),
       )
     }
 
@@ -624,6 +658,7 @@ class DxFiler {
         case "Ext" => if (file.getName.contains(".")) file.getName.substring(file.getName.lastIndexOf(".") + 1) else ""
         case "Size" => if (file.isDirectory) null else java.lang.Long.valueOf(file.length)
         case "Last Modified" => if (file.lastModified <= 0) null else new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date(file.lastModified))
+        case "ID" => file.id
       }
     }
 

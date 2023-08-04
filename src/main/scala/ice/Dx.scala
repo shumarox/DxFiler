@@ -138,7 +138,8 @@ object Dx {
             case i: Integer => i.longValue
             case _ => 0L
           }
-        new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size)).toDxFile
+        val id: String = entry("id").toString
+        new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size, id)).toDxFile
       }.toArray
     }
 
@@ -642,7 +643,7 @@ private class DxPath(private val pathString: String, val dxFileAttributes: DxFil
 
 object DxRootPath extends DxPath("/", RootFileAttributes)
 
-private class DxFileAttributes(override val isDirectory: Boolean, @transient override val lastModifiedTime: FileTime, override val size: Long) extends BasicFileAttributes with Serializable {
+private class DxFileAttributes(override val isDirectory: Boolean, @transient override val lastModifiedTime: FileTime, override val size: Long, val id: String) extends BasicFileAttributes with Serializable {
   @transient
   override val creationTime: FileTime = null
 
@@ -658,7 +659,7 @@ private class DxFileAttributes(override val isDirectory: Boolean, @transient ove
   override def fileKey: Object = null
 }
 
-private object RootFileAttributes extends DxFileAttributes(isDirectory = true, lastModifiedTime = null, size = 0)
+private object RootFileAttributes extends DxFileAttributes(isDirectory = true, lastModifiedTime = null, size = 0, id = null)
 
 class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   var downloaded: File = _
@@ -669,6 +670,8 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   def this(parent: DxFile, child: String) = this(parent.path.resolveDx(child))
 
   def this(parent: DxFile, child: File) = this(parent, child.getName)
+
+  def id: String = path.dxFileAttributes.id
 
   private def toStringOrNull(path: Path): String = Option(path).map(_.toString).orNull
 
