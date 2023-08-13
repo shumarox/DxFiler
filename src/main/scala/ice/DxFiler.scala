@@ -22,7 +22,9 @@ import scala.swing.BorderPanel.Position.*
 import scala.swing.Orientation.*
 import scala.swing.event.{Key, KeyPressed, MouseClicked, TableRowsSelected}
 import scala.swing.{Action, *}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Random, Success, Try}
+
+class DxFileList(list: java.util.List[DxFile]) extends java.util.ArrayList[DxFile](list) with Serializable
 
 object DxFiler {
   private val APP_NAME = "DxFiler"
@@ -35,9 +37,14 @@ object DxFiler {
 
   private var frame: Frame = _
 
-  private def showError(message: String, detail: Object = null): Unit = {
+  private object DxFileListFlavor extends DataFlavor("application/dx-filer_" + Random.nextInt(Integer.MAX_VALUE).toHexString + "; class=ice.DxFileList")
+
+  private def showError(message: String, detail: Object = null): Unit = showMessage(message, detail, Dialog.Message.Error)
+  private def showWarning(message: String, detail: Object = null): Unit = showMessage(message, detail, Dialog.Message.Warning)
+
+  private def showMessage(message: String, detail: Object, messageType: Dialog.Message.Value): Unit = {
     val messageForDisplay = if (detail == null || detail.toString.isEmpty) message else message + "\n" + detail
-    Dialog.showMessage(frame, messageForDisplay, APP_NAME, Dialog.Message.Error)
+    Dialog.showMessage(frame, messageForDisplay, APP_NAME, messageType)
   }
 
   def main(args: Array[String]): Unit = {
@@ -716,7 +723,6 @@ class DxFiler {
   private class DxFileTransferHandler extends TransferHandler {
 
     private var inQuestionDialog: Boolean = false
-    private object DxFileListFlavor extends DataFlavor(classOf[List[DxFile]], "DxFilerFileFlavor")
 
     override protected def createTransferable(c: JComponent): Transferable = {
       val supportFlavors = Array[DataFlavor](DxFileListFlavor, DataFlavor.javaFileListFlavor)
@@ -736,7 +742,7 @@ class DxFiler {
 
         override def getTransferData(flavor: DataFlavor): Object = {
           if (flavor == DxFileListFlavor) {
-            util.Arrays.asList(fileList: _*)
+            new DxFileList(util.Arrays.asList(fileList: _*))
           } else if (flavor == DataFlavor.javaFileListFlavor) {
             if (fileList.exists(_.downloaded == null)) {
               if (!inQuestionDialog) {
@@ -830,7 +836,9 @@ class DxFiler {
           case Success(f: util.List[File]) =>
             f
           case Failure(ex) =>
-            showError("ファイルの取得に失敗しました。", ex)
+            Future {
+              showWarning("ファイルの転送がキャンセルされました。", ex)
+            }
             return false
         }
 
