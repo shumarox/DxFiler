@@ -226,6 +226,8 @@ object Dx {
           setCharset(StandardCharsets.UTF_8)
         }.extractAll(parent.toPath.toString)
 
+        result.delete()
+
         Files.walkFileTree(parent.toPath, new util.HashSet[FileVisitOption], Integer.MAX_VALUE, new FileVisitor[Path]() {
           override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult = FileVisitResult.CONTINUE
 
