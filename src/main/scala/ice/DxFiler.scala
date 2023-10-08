@@ -223,9 +223,9 @@ class DxFiler {
                   val sep = "\t"
                   "" +
                     fileTableModel.getValueAt(row, 1) + sep +
-                    fileTableModel.getValueAt(row, 2) + sep +
-                    fileTableModel.getValueAt(row, 3) + sep +
-                    fileTableModel.getValueAt(row, 4) + sep +
+                    Option(fileTableModel.getValueAt(row, 2)).getOrElse("") + sep +
+                    Option(fileTableModel.getValueAt(row, 3)).getOrElse("") + sep +
+                    Option(fileTableModel.getValueAt(row, 4)).getOrElse("") + sep +
                     fileTableModel.getValueAt(row, 5)
                 }.mkString("\n")
 
