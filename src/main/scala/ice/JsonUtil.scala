@@ -10,11 +10,11 @@ object JsonUtil {
 
   private def convert(m: java.util.Map[_, _]): Map[_, _] =
     m.asScala.map {
-      case (k, l: java.util.List[_]) =>
+      case (k: String, l: java.util.List[_]) =>
         (k, convert(l))
-      case (k, m: java.util.Map[_, _]) =>
+      case (k: String, m: java.util.Map[_, _]) =>
         (k, convert(m))
-      case (k, o) =>
+      case (k: String, o) =>
         (k, o)
     }.toMap
 
