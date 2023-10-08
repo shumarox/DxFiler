@@ -20,9 +20,10 @@ import scala.concurrent.Future
 import scala.jdk.CollectionConverters.*
 import scala.swing.BorderPanel.Position.*
 import scala.swing.Orientation.*
-import scala.swing.event.{Key, KeyPressed, MouseClicked, TableRowsSelected}
+import scala.swing.event.{FocusLost, Key, KeyPressed, MouseClicked, TableRowsSelected}
 import scala.swing.{Action, *}
-import scala.util.{Failure, Random, Success, Try}
+import scala.util.{Failure, Random, Success, Try, boundary}
+import scala.util.boundary.break
 
 class DxFileList(list: java.util.List[DxFile]) extends java.util.ArrayList[DxFile](list) with Serializable
 
@@ -96,6 +97,10 @@ class DxFiler {
   }
 
   private val fileTableModel: FileTableModel = new FileTableModel
+
+  private var treeSelectionChangeProcessing = false
+
+  private var prevAddress: String = ""
 
   private class FileTable extends Table {
     override def apply(row: Int, column: Int): Any = model.getValueAt(viewToModelRow(row), viewToModelColumn(column))
@@ -378,8 +383,15 @@ class DxFiler {
 
   private val treeSelectionListener: TreeSelectionListener =
     (tse: TreeSelectionEvent) => {
-      val node = tse.getPath.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]
-      WaitCursorWorker(frame, true)(() => refresh(node))(null).execute()
+      if (!treeSelectionChangeProcessing) {
+        try {
+          treeSelectionChangeProcessing = true
+          val node = tse.getPath.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]
+          WaitCursorWorker(frame, true)(() => refresh(node))(null).execute()
+        } finally {
+          treeSelectionChangeProcessing = false
+        }
+      }
     }
 
   private val treeKeyListener: KeyListener = new KeyAdapter {
@@ -535,8 +547,65 @@ class DxFiler {
     }) = South
   }
 
-  private val tfAddress: TextField = new TextField {
-    editable = false
+  private val tfAddress: TextField = new TextField
+
+  private def jumpToAddress(): Unit = boundary {
+
+    if (treeSelectionChangeProcessing) break()
+    if (prevAddress == tfAddress.text) break()
+
+    WaitCursorWorker(frame, true)(() => {
+      var address = tfAddress.text
+      address += (if address.endsWith("/") then "" else "/")
+
+      val addressList = mutable.ArrayBuffer[String]("/")
+      var pos = 0
+      while ( {
+        pos = address.indexOf("/", pos + 1)
+        pos >= 0
+      }) {
+        addressList.addOne(address.substring(0, pos))
+      }
+
+      var lastFoundFile: DxFile = null
+
+      addressList.foreach { path =>
+        val file = new DxFile(new DxPath(path, DxFileAttributes(true, null, 0, null)))
+
+        findTreePath(file).foreach { treePath =>
+
+          val node = treePath.getLastPathComponent.asInstanceOf[DefaultMutableTreeNode]
+          node.removeAllChildren()
+
+          val children = getChildren(file)
+          children.filter(_.isDirectory).foreach { child =>
+            node.add(new DefaultMutableTreeNode(child))
+          }
+          setTableData(children)
+          setCurrentDirectoryInfo(file, children)
+
+          tree.getModel.asInstanceOf[DefaultTreeModel].reload(node)
+
+          tree.expandPath(treePath)
+
+          lastFoundFile = file
+        }
+      }
+
+      if (lastFoundFile != null) {
+        tree.setSelectionPath(findTreePath(lastFoundFile).orNull)
+        tree.scrollPathToVisible(findTreePath(lastFoundFile).orNull)
+      }
+
+    })(null).execute()
+  }
+
+  tfAddress.listenTo(tfAddress, tfAddress.keys)
+  tfAddress.reactions += {
+    case ev: KeyPressed if ev.key == Key.Enter =>
+      jumpToAddress()
+    case ev: FocusLost =>
+      jumpToAddress()
   }
 
   tree.setSelectionInterval(0, 0)
@@ -593,6 +662,7 @@ class DxFiler {
     lbStatus.text = currentDirectoryInfo
 
     tfAddress.text = file.getPath
+    prevAddress = file.getPath
 
     mainPanel.peer.getTopLevelAncestor match {
       case f: JFrame => f.setTitle(APP_NAME + " : " + file.getName)
@@ -701,8 +771,11 @@ class DxFiler {
       val file = value.asInstanceOf[DefaultMutableTreeNode].getUserObject.asInstanceOf[DxFile]
 
       setIcon(DIRECTORY_ICON)
-      setText(file.getName)
-      setToolTipText(file.getPath)
+
+      if (file != null) {
+        setText(file.getName)
+        setToolTipText(file.getPath)
+      }
 
       this
     }
