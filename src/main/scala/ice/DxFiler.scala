@@ -1,10 +1,11 @@
 package ice
 
-import java.awt.datatransfer.{Clipboard, ClipboardOwner, DataFlavor, StringSelection, Transferable, UnsupportedFlavorException}
+import java.awt.datatransfer.*
 import java.awt.dnd.DnDConstants
 import java.awt.event.*
 import java.awt.{Desktop, Toolkit, Component as AComponent}
 import java.io.*
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Date
@@ -22,7 +23,7 @@ import scala.swing.BorderPanel.Position.*
 import scala.swing.Orientation.*
 import scala.swing.event.{FocusLost, Key, KeyPressed, MouseClicked, TableRowsSelected}
 import scala.swing.{Action, *}
-import scala.util.{Failure, Random, Success, Try, boundary}
+import scala.util.*
 import scala.util.boundary.break
 
 class DxFileList(list: java.util.List[DxFile]) extends java.util.ArrayList[DxFile](list) with Serializable
@@ -41,6 +42,7 @@ object DxFiler {
   private object DxFileListFlavor extends DataFlavor("application/dx-filer_" + Random.nextInt(Integer.MAX_VALUE).toHexString + "; class=ice.DxFileList")
 
   private def showError(message: String, detail: Object = null): Unit = showMessage(message, detail, Dialog.Message.Error)
+
   private def showWarning(message: String, detail: Object = null): Unit = showMessage(message, detail, Dialog.Message.Warning)
 
   private def showMessage(message: String, detail: Object, messageType: Dialog.Message.Value): Unit = {
@@ -62,6 +64,17 @@ object DxFiler {
 
     val filer = new DxFiler
     frame.contents = filer.mainPanel
+
+    frame.menuBar = new MenuBar {
+      contents += new Menu("View") {
+        val menuItem =
+          new MenuItem(Action("Shared link list") {
+            SharedLinkListView.show()
+          })
+        menuItem.mnemonic = Key.L
+        contents += menuItem
+      }
+    }
 
     frame.peer.setLocationByPlatform(true)
     frame.pack()
@@ -201,6 +214,15 @@ class DxFiler {
       }
 
       if (selectedFiles.nonEmpty) {
+        contents +=
+          createMenuItem("Create shared link", Key.L) {
+            executeAndShowError {
+              createSharedLink(selectedFiles.toArray)
+            }
+          }
+      }
+
+      if (selectedFiles.nonEmpty) {
         def setToClipboard(text: String): Unit =
           Toolkit.getDefaultToolkit.getSystemClipboard.setContents(new StringSelection(text), (clipboard: Clipboard, contents: Transferable) => {})
 
@@ -212,7 +234,7 @@ class DxFiler {
         }
 
         contents += new Menu("Copy property") {
-          mnemonic =  Key.C
+          mnemonic = Key.C
           contents += createMenuItem("Copy file name", Key.N)(setPropertyToClipboard(_.getName))
           contents += createMenuItem("Copy dropbox path", Key.P)(setPropertyToClipboard(_.getPath))
           contents += createMenuItem("Copy dropbox ID", Key.I)(setPropertyToClipboard(_.id))
@@ -239,6 +261,8 @@ class DxFiler {
 
   private def openFile(file: DxFile): Unit =
     WaitCursorWorker(frame, true)(() => desktop.open(Option(file.downloaded).getOrElse(Dx.download(file))))(null).execute()
+
+  private def openBrowser(url: String): Unit = desktop.browse(new URL(url).toURI)
 
   private def downloadFileToTemporary(file: DxFile): Unit =
     WaitCursorWorker(frame, true)(() => Option(file.downloaded).getOrElse(Dx.download(file)))(null).execute()
@@ -288,6 +312,14 @@ class DxFiler {
         Dx.deleteWithErrorMessage(file.toString)
       }
       refresh()
+    }(null).execute()
+
+  private def createSharedLink(files: Array[DxFile]): Unit =
+    WaitCursorWorker(frame, true) { () =>
+      files.foreach { file =>
+        val url = Dx.createSharedLinkWithErrorMessage(file.getPath)
+        if (url != null) openBrowser(url)
+      }
     }(null).execute()
 
   table.listenTo(table.mouse.clicks)

@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util
 import java.util.{Properties, TimeZone}
 import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.swing.{Dialog, Window}
 import scala.util.matching.Regex
@@ -412,6 +413,25 @@ object Dx {
     }
   }
 
+  def revokeSharedLink(url: String): Either[String, String] = {
+    ensureAccessToken()
+
+    val body = s"""{"url": "$url"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/sharing/revoke_shared_link", "POST", properties, body)
+  }
+
+  def revokeSharedLinkWithErrorMessage(url: String): Unit = {
+    revokeSharedLink(url).match {
+      case Right(_) =>
+      case Left(result) =>
+        System.err.println(result)
+        showError("共有リンクの削除に失敗しました。", result)
+        Array[DxPath]()
+    }
+  }
+
   def move(from: String, to: String): Either[String, String] = {
     ensureAccessToken()
 
@@ -450,6 +470,92 @@ object Dx {
     }
   }
 
+  def createSharedLink(path: String): Either[String, String] = {
+    ensureAccessToken()
+
+    val body = s"""{"path": "$path"}"""
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+    processHttpRequest("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", "POST", properties, body) match {
+      case Right(result) =>
+        val map: Map[String, Object] = JsonUtil.convert(result)
+        Right(map("url").toString)
+      case Left(result) =>
+        Left(result)
+    }
+  }
+
+  def createSharedLinkWithErrorMessage(path: String): String = {
+    createSharedLink(path).match {
+      case Right(url) => url
+      case Left(result) =>
+        System.err.println(result)
+        showError("共有リンクの作成に失敗しました。", result)
+        null
+    }
+  }
+
+  def listSharedLink(path: String): Array[DxFile] = {
+    ensureAccessToken()
+
+    val properties = Map("Authorization" -> s"Bearer ${Dx.accessToken}", "Content-Type" -> "application/json")
+
+    val resultFileList: mutable.ArrayBuffer[DxFile] = new mutable.ArrayBuffer[DxFile]
+
+    def resultToDxFileArray(map: Map[String, Object]): Array[DxFile] = {
+      map("links").asInstanceOf[List[Map[String, Object]]].map { entry =>
+        val path: String = entry("path_lower").toString
+        val isDirectory: Boolean = entry(".tag") == "folder"
+        val sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+        val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").toString.replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
+        val size: Long =
+          if (isDirectory) 0L else entry("size") match {
+            case l: java.lang.Long => l
+            case i: Integer => i.longValue
+            case _ => 0L
+          }
+        val id: String = entry("id").toString
+        val url: String = entry("url").toString
+        new DxPath(path, new DxFileAttributes(isDirectory, lastModifiedTime, size, id, url)).toDxFile
+      }.toArray
+    }
+
+    @tailrec
+    def processResultAndNext(result: String): Unit = {
+      val map = JsonUtil.convert(result)
+      resultFileList ++= resultToDxFileArray(map)
+
+      if (map("has_more").toString.toBoolean) {
+        val cursor = map("cursor").toString
+        val body = s"""{"cursor": "$cursor"}"""
+
+        processHttpRequest("https://api.dropboxapi.com/2/sharing/list_shared_links", "POST", properties, body).match {
+          case Right(result) =>
+            processResultAndNext(result)
+          case Left(result) =>
+            System.err.println(result)
+            showError("共有リンク一覧の取得に失敗しました。", result)
+        }
+      }
+    }
+
+    def listStart(path: String): Unit = {
+      val body = if (path == null || path.isEmpty || path == "/") "{}" else s"""{"path": "$path"}"""
+
+      processHttpRequest("https://api.dropboxapi.com/2/sharing/list_shared_links", "POST", properties, body).match {
+        case Right(result) =>
+          processResultAndNext(result)
+        case Left(result) =>
+          System.err.println(result)
+          showError("共有リンク一覧の取得に失敗しました。", result)
+      }
+    }
+
+    listStart(path)
+
+    resultFileList.toArray
+  }
 }
 
 private class DxPath(private val pathString: String, val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
@@ -550,7 +656,7 @@ private class DxPath(private val pathString: String, val dxFileAttributes: DxFil
 
 object DxRootPath extends DxPath("/", RootFileAttributes)
 
-private class DxFileAttributes(override val isDirectory: Boolean, @transient override val lastModifiedTime: FileTime, override val size: Long, val id: String) extends BasicFileAttributes with Serializable {
+private class DxFileAttributes(override val isDirectory: Boolean, @transient override val lastModifiedTime: FileTime, override val size: Long, val id: String, val sharedLinkUrl: String = null) extends BasicFileAttributes with Serializable {
   @transient
   override val creationTime: FileTime = null
 
@@ -579,6 +685,8 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
   def this(parent: DxFile, child: File) = this(parent, child.getName)
 
   def id: String = path.dxFileAttributes.id
+
+  def sharedLinkUrl: String = path.dxFileAttributes.sharedLinkUrl
 
   private def toStringOrNull(path: Path): String = Option(path).map(_.toString).orNull
 
