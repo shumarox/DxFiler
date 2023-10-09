@@ -4,14 +4,13 @@ import net.lingala.zip4j.ZipFile
 
 import java.awt.Desktop
 import java.io.*
-import java.net.{HttpURLConnection, URI, URL}
+import java.net.{URI, URL}
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.nio.file.attribute.*
 import java.text.SimpleDateFormat
 import java.util
 import java.util.{Properties, TimeZone}
-import javax.net.ssl.HttpsURLConnection
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 import scala.swing.{Dialog, Window}
@@ -19,6 +18,8 @@ import scala.util.matching.Regex
 import scala.util.{Try, Using}
 
 object Dx {
+  import HttpClient.*
+
   private val PROPERTY_FILE_NAME = "DxFiler.properties"
   private val properties = new Properties
 
@@ -29,7 +30,8 @@ object Dx {
   private val APP_NAME = "DxFiler"
   private val APP_KEY = properties.getProperty("APP_KEY")
   private val APP_SECRET = properties.getProperty("APP_SECRET")
-  private val IN_SECURE = java.lang.Boolean.valueOf(properties.getProperty("IN_SECURE"))
+
+  inSecure = java.lang.Boolean.valueOf(properties.getProperty("IN_SECURE"))
 
   private var refreshToken: String = properties.getProperty("REFRESH_TOKEN")
   private var accessToken: String = _
@@ -448,103 +450,6 @@ object Dx {
     }
   }
 
-  private def escapeUnicode(s: String): String =
-    s.map(c => if c <= 0x7f then c else String.format("\\u%04x", c.toInt)).mkString
-
-  private def readText(is: InputStream): String = {
-    val result = new ByteArrayOutputStream()
-
-    Using.resource(is) { is =>
-      val buffer: Array[Byte] = new Array[Byte](1024)
-      var length: Int = 0
-
-      while ( {
-        length = is.read(buffer)
-        length != -1
-      }) {
-        result.write(buffer, 0, length)
-      }
-    }
-
-    result.toString("UTF-8")
-  }
-
-  private def processHttpRequest(url: String, method: String, properties: Map[String, String], body: Object): Either[String, String] = {
-    val conn: HttpURLConnection = processHttpRequestSend(url, method, properties, body)
-
-    if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
-      Right(readText(conn.getInputStream))
-    } else {
-      Left(readText(conn.getErrorStream))
-    }
-  }
-
-  private def saveFile(is: InputStream, fileName: String): File = {
-    Using.resource(new BufferedInputStream(is)) { is =>
-      TempFileUtil.copyToTempFile(is, fileName)
-    }
-  }
-
-  private def processHttpDownload(url: String, method: String, properties: Map[String, String], body: Object, fileName: String): Either[String, File] = {
-    val conn: HttpURLConnection = processHttpRequestSend(url, method, properties, body)
-
-    if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
-      Right(saveFile(conn.getInputStream, fileName))
-    } else {
-      Left(readText(conn.getErrorStream))
-    }
-  }
-
-  private def processHttpUpload(url: String, method: String, properties: Map[String, String], is: InputStream, limit: Long): Either[String, String] = {
-    val conn = processHttpConnect(url, method, properties, is != null)
-
-    val bufferSize = 16 * 1024 * 1024
-    val buffer = new Array[Byte](bufferSize)
-
-    Using.resource(new BufferedOutputStream(conn.getOutputStream)) { os =>
-      var offset = 0
-      while (offset < limit) {
-        val len = is.read(buffer, 0, bufferSize min (limit - offset).toInt)
-        os.write(buffer, 0, len)
-        offset += bufferSize
-      }
-    }
-
-    if (conn.getResponseCode == HttpURLConnection.HTTP_OK) {
-      Right(readText(conn.getInputStream))
-    } else {
-      Left(readText(conn.getErrorStream))
-    }
-  }
-
-  private def processHttpRequestSend(url: String, method: String, properties: Map[String, String], body: Object): HttpURLConnection = {
-    val conn = processHttpConnect(url, method, properties, body != null)
-
-    if (body != null) {
-      Using.resource(conn.getOutputStream) { os =>
-        os.write(body.toString.getBytes(StandardCharsets.UTF_8))
-      }
-    }
-
-    conn
-  }
-
-  private def processHttpConnect(url: String, method: String, properties: Map[String, String], doOutput: Boolean = true, doInput: Boolean = true): HttpURLConnection = {
-    val conn = new URL(url).openConnection.asInstanceOf[HttpsURLConnection]
-    if (IN_SECURE) {
-      conn.setSSLSocketFactory(InSecureSSLContext.instance.getSocketFactory)
-    }
-    conn.setRequestMethod(method)
-    if (properties != null) {
-      properties.foreach { (k, v) =>
-        conn.setRequestProperty(k, v)
-      }
-    }
-    conn.setDoOutput(doOutput)
-    conn.setDoInput(doInput)
-    conn.connect()
-    conn
-  }
 }
 
 private class DxPath(private val pathString: String, val dxFileAttributes: DxFileAttributes) extends Path with Serializable {
@@ -705,7 +610,7 @@ class DxFile(val path: DxPath) extends File(path.toAbsolutePath.toString) {
 
   override def canWrite: Boolean = false
 
-  override def exists: Boolean = ???
+  override def exists: Boolean = throw new UnsupportedOperationException
 
   override def isDirectory: Boolean = path.dxFileAttributes.isDirectory
 
