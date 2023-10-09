@@ -136,7 +136,7 @@ object Dx {
         val lastModifiedTime: FileTime = if (isDirectory) null else Try(FileTime.fromMillis(sdf.parse(entry("client_modified").toString.replaceAll("T", " ").dropRight(1)).getTime)).getOrElse(null)
         val size: Long =
           if (isDirectory) 0L else entry("size") match {
-            case l: Long => l
+            case l: java.lang.Long => l
             case i: Integer => i.longValue
             case _ => 0L
           }

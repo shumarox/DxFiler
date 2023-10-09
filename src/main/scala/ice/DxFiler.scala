@@ -77,7 +77,7 @@ object DxFiler {
       super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
       value match {
         case null =>
-        case l: Long => setText(f"$l%,3d")
+        case l: java.lang.Long => setText(f"$l%,3d")
         case _ =>
       }
       setHorizontalAlignment(SwingConstants.RIGHT)
