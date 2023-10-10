@@ -377,7 +377,9 @@ class DxFiler {
 
       ev.consume()
     case ev: KeyPressed if ev.key == Key.F5 =>
-      refresh()
+      WaitCursorWorker(frame, true) { () =>
+        refresh()
+      }(null).execute()
       ev.consume()
     case ev: KeyPressed if ev.key == Key.F2 =>
       if (getSelectedFiles.length == 1) {
@@ -429,7 +431,9 @@ class DxFiler {
   private val treeKeyListener: KeyListener = new KeyAdapter {
     override def keyPressed(ev: KeyEvent): Unit = {
       if (ev.getKeyCode == KeyEvent.VK_F5) {
-        refresh()
+        WaitCursorWorker(frame, true) { () =>
+          refresh()
+        }(null).execute()
         ev.consume()
       } else if (ev.getKeyCode == KeyEvent.VK_F2) {
         ev.consume()
