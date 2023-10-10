@@ -74,7 +74,9 @@ object SharedLinkListView {
 
       ev.consume()
     case ev: KeyPressed if ev.key == Key.F5 =>
-      refresh()
+      WaitCursorWorker(frame, true) { () =>
+        refresh()
+      }(null).execute()
       ev.consume()
     case ev: KeyPressed if ev.key == Key.Delete =>
       if (getSelectedFiles.nonEmpty) {
